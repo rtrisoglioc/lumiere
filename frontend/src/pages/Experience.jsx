@@ -13,6 +13,7 @@ import { Header } from "@/components/Header";
 import { StatusBadge, ProcessTimeline } from "@/components/StatusBadge";
 import { CircularScore, ScoreBar } from "@/components/CircularScore";
 import { AgentTrace } from "@/components/AgentTrace";
+import { MusicPicker } from "@/components/MusicPicker";
 
 const TABS = [
   { id: "story", icon: Clapperboard },
@@ -80,6 +81,7 @@ export default function Experience() {
   const [cutting, setCutting] = useState(false);
   const [revising, setRevising] = useState(false);
   const [instruction, setInstruction] = useState("");
+  const [selectedMusic, setSelectedMusic] = useState(null);
   const pollRef = useRef(null);
 
   const fetchExp = useCallback(async () => {
@@ -139,7 +141,7 @@ export default function Experience() {
   const doCut = async () => {
     setCutting(true);
     try {
-      await api.post(`/experiences/${id}/cut`);
+      await api.post(`/experiences/${id}/cut`, { music_id: selectedMusic });
       await fetchExp(); await fetchRuns();
       toast.success("Rendering cut");
     } catch (e) { toast.error(e?.response?.data?.detail || "Cut failed"); }
@@ -150,7 +152,7 @@ export default function Experience() {
     if (!instruction.trim()) return;
     setRevising(true);
     try {
-      await api.post(`/cuts/${cutId}/revise`, { instruction: instruction.trim() });
+      await api.post(`/cuts/${cutId}/revise`, { instruction: instruction.trim(), music_id: selectedMusic });
       setInstruction("");
       await fetchExp(); await fetchRuns();
       toast.success("Re-editing");
@@ -160,8 +162,8 @@ export default function Experience() {
 
   if (!exp) {
     return (
-      <div className="min-h-screen bg-lumiere-base">
-        <Header back />
+      <div className="min-h-screen bg-lumiere-base theme-dark">
+        <Header dark back />
         <div className="flex items-center justify-center py-32"><span className="font-mono text-sm text-lumiere-orange cursor-blink">LOADING</span></div>
       </div>
     );
@@ -177,8 +179,8 @@ export default function Experience() {
   const latestReadyCut = [...cuts].reverse().find((c) => c.status === "ready");
 
   return (
-    <div className="min-h-screen bg-lumiere-base pb-24 sm:pb-8">
-      <Header back />
+    <div className="min-h-screen bg-lumiere-base text-lumiere-ivory theme-dark pb-24 sm:pb-8">
+      <Header dark back />
 
       {/* title band */}
       <div className="px-4 sm:px-8 pt-6 pb-4 max-w-6xl mx-auto">
@@ -430,6 +432,9 @@ export default function Experience() {
             {/* EDIT */}
             {tab === "edit" && (
               <div className="space-y-8">
+                <div className="border border-white/10 bg-lumiere-surface p-5">
+                  <MusicPicker selected={selectedMusic} onSelect={setSelectedMusic} />
+                </div>
                 <div className="flex flex-wrap items-center gap-4">
                   <button data-testid="render-cut-button" onClick={doCut} disabled={cutting || usableCount === 0}
                     className="inline-flex items-center gap-2 bg-lumiere-orange hover:bg-lumiere-orangeHover disabled:opacity-40 text-white px-6 py-3 font-mono text-xs uppercase tracking-widest transition-colors duration-300">

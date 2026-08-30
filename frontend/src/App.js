@@ -5,15 +5,18 @@ import { I18nProvider } from "@/i18n";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import Login from "@/pages/Login";
 import AuthCallback from "@/pages/AuthCallback";
-import Dashboard from "@/pages/Dashboard";
+import Home from "@/pages/Home";
 import Experience from "@/pages/Experience";
+import Account from "@/pages/Account";
+import Pricing from "@/pages/Pricing";
+import CreateVideo from "@/pages/CreateVideo";
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-lumiere-base">
-        <span className="font-mono text-lumiere-orange text-sm cursor-blink">LUMIÈRE</span>
+      <div className="min-h-screen flex items-center justify-center bg-lumiere-ivory">
+        <span className="font-mono text-lumiere-gold text-sm cursor-blink">LUMIÈRE</span>
       </div>
     );
   }
@@ -27,8 +30,11 @@ function AppRouter() {
   return (
     <Routes>
       <Route path="/" element={<Login />} />
-      <Route path="/studio" element={<Protected><Dashboard /></Protected>} />
+      <Route path="/studio" element={<Protected><Home /></Protected>} />
       <Route path="/studio/:id" element={<Protected><Experience /></Protected>} />
+      <Route path="/account" element={<Protected><Account /></Protected>} />
+      <Route path="/pricing" element={<Protected><Pricing /></Protected>} />
+      <Route path="/create-video" element={<Protected><CreateVideo /></Protected>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

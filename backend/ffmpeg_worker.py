@@ -77,3 +77,16 @@ def render_cut(edl_clips: list, resolver, tmp_dir: Path, out_path: Path) -> dict
 
     info = probe(str(out_path))
     return {"ok": True, "clips": len(seg_files), "duration": info.get("duration", 0), "path": str(out_path)}
+
+
+def add_music(video_path, music_path, out_path) -> bool:
+    """Mux a music bed under the existing audio, trimmed to the video length."""
+    cmd = [
+        "ffmpeg", "-y", "-i", str(video_path), "-i", str(music_path),
+        "-filter_complex",
+        "[1:a]volume=0.35[m];[0:a][m]amix=inputs=2:duration=first:dropout_transition=0[a]",
+        "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-shortest",
+        str(out_path), "-loglevel", "error",
+    ]
+    r = _run(cmd)
+    return r.returncode == 0 and Path(out_path).exists()

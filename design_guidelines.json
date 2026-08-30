@@ -1,117 +1,153 @@
 {
-  "theme": "dark",
+  "theme": "dual_cinematic_editorial",
+  "colors": {
+    "core": {
+      "cinema_ivory": "#F7F3EA",
+      "warm_white": "#FFFDF8",
+      "lumiere_ink": "#171714",
+      "golden_hour": "#D6A85F",
+      "sage_film": "#8E9A87",
+      "iris_ai": "#7267A8"
+    },
+    "light_mode": {
+      "background": "#F7F3EA",
+      "surface": "#FFFDF8",
+      "surface_hover": "#F0EBE1",
+      "text_primary": "#171714",
+      "text_secondary": "#17171480",
+      "border": "#1717141A",
+      "accent_primary": "#D6A85F",
+      "accent_secondary": "#8E9A87",
+      "ai_state": "#7267A8"
+    },
+    "dark_mode": {
+      "background": "#171714",
+      "surface": "#232320",
+      "surface_hover": "#2C2C28",
+      "text_primary": "#F7F3EA",
+      "text_secondary": "#F7F3EA80",
+      "border": "#F7F3EA1A",
+      "accent_primary": "#D6A85F",
+      "accent_secondary": "#8E9A87",
+      "ai_state": "#7267A8"
+    },
+    "guidelines": "Use Iris AI ONLY for meaningful AI states (e.g., AI Video Generation, AI Enhance, Agent Trace). Golden Hour is the primary interaction color."
+  },
   "typography": {
     "fonts": {
-      "headings": "Playfair Display",
-      "body": "Manrope",
-      "mono": "JetBrains Mono"
+      "display": "'Playfair Display', serif",
+      "body": "'Manrope', sans-serif",
+      "technical": "'JetBrains Mono', monospace"
     },
-    "hierarchy": {
-      "h1": "text-4xl sm:text-5xl font-black tracking-tighter uppercase",
-      "h2": "text-2xl sm:text-3xl font-bold tracking-tight",
-      "h3": "text-xl sm:text-2xl font-medium tracking-tight",
-      "body": "text-base leading-relaxed text-zinc-300",
-      "labels": "text-xs font-mono uppercase tracking-[0.2em] text-zinc-500",
-      "technical": "text-sm font-mono text-cyan-400"
-    },
-    "instructions": "Use Playfair Display for all cinematic and storytelling headers. Use JetBrains Mono for AI confidence scores, agent names, and metadata. Manrope for conversational UI and standard readability. Never use Inter for headings."
+    "scale": {
+      "h1": "text-5xl md:text-6xl tracking-tighter font-display",
+      "h2": "text-4xl md:text-5xl tracking-tight font-display",
+      "h3": "text-2xl md:text-3xl tracking-tight font-display",
+      "h4": "text-xl font-display",
+      "body": "text-base font-body leading-relaxed",
+      "body_sm": "text-sm font-body leading-relaxed",
+      "label": "text-xs uppercase tracking-[0.2em] font-body font-semibold",
+      "metric": "text-sm font-technical tracking-tight"
+    }
   },
-  "colors": {
-    "background": {
-      "base": "#050505",
-      "surface": "#121212",
-      "surfaceHover": "#1C1C1C",
-      "glass": "rgba(18, 18, 18, 0.7)"
-    },
-    "text": {
-      "primary": "#FFFFFF",
-      "secondary": "#A1A1AA",
-      "muted": "#71717A"
-    },
-    "accents": {
-      "primary": "#E55900",
-      "primaryHover": "#FF6B00",
-      "technical": "#06B6D4",
-      "success": "#10B981",
-      "warning": "#F59E0B",
-      "danger": "#EF4444"
-    },
-    "borders": {
-      "subtle": "rgba(255, 255, 255, 0.08)",
-      "active": "rgba(255, 255, 255, 0.2)"
-    },
-    "instructions": "Adopt the 'Midnight Projection Room' archetype. UI must recede to let content (video/images) pop. Do not use generic SaaS blues. Accent color is a 'Cinematic Orange' used sparingly for critical actions like 'GET THE SHOT'. Technical AI traces use Cyan for contrast."
+  "spacing_and_layout": {
+    "philosophy": "Generous whitespace, editorial margins. Use Tailwind scales p-6, p-8, p-12, p-16, p-24.",
+    "grid": "Bento-style asymmetric grids for experiences, strict high-density grids for studio workspaces.",
+    "container_padding": "px-6 md:px-12 lg:px-24 py-12 md:py-24"
   },
-  "visual_enhancers": {
-    "borders": "1px solid rgba(255, 255, 255, 0.08)",
-    "radius": "rounded-none or max rounded-sm (2px-4px) for a sharp, editorial film-cut aesthetic.",
-    "shadows": "Ambient glows instead of drop shadows. Use drop-shadow-[0_0_15px_rgba(229,89,0,0.15)] for primary actions.",
-    "textures": "Include a subtle film grain overlay (noise) on the background body to prevent pure digital flatness. You can use an SVG filter or a CSS radial gradient noise.",
-    "decorations": "Use 'Crosshairs' (+) in the corners of main video player and dashboard cards to simulate a camera viewfinder."
-  },
-  "layouts_and_grids": {
-    "mobile_first": "PWA optimized. Use a bottom-docked navigation bar for mobile instead of a top hamburger menu.",
-    "spacing": "Generous padding. p-6 or p-8 inside cards. gap-6 between grid items.",
-    "bento_grid": "For 'Story Completeness', use a highly dense, asymmetrical grid (Mode B). Combine radial charts and progress bars seamlessly.",
-    "agent_traceability": "Render as a terminal-like cascading list, utilizing monospace fonts, displaying Latency and Confidence with strict alignment.",
-    "instructions": "Avoid symmetrical, boring grids. The 'Create Experience' and 'Story Intent' sections should feel like full-screen immersive conversational cards."
+  "route_theme_mapping": {
+    "light": [
+      "/home", "/experiences", "/story-creation", "/profile", "/pricing", "/account", "/visual-dna", "/insights", "/ai-video-generation", "/login"
+    ],
+    "dark": [
+      "/live-director", "/footage-review", "/story-evaluation", "/editing-studio", "/film-preview", "/agent-trace", "/ai-enhance"
+    ]
   },
   "components": {
-    "buttons": "Sharp edges (rounded-sm), high contrast. 'Primary' buttons use cinematic orange. 'Secondary' buttons are transparent with 1px border. Always use explicit hover states.",
-    "cards": "Flat surfaces (surface color), no shadows, 1px subtle borders. For 'Shot Missions', use a highlighted left border (e.g., border-l-2 border-primary) to show active status.",
-    "video_player": "Must be central, prominent, wrapped in a 1px border with padding (to look like a film monitor). Include 'Timecode' overlays in monospace.",
-    "upload_states": "Uploading -> Processing -> Analyzing -> Selecting -> Editing -> Ready. Use a visual timeline or stepping progress component with smooth transitions.",
-    "language_toggle": "A crisp, small toggle in the header or bottom dock [ES / EN].",
-    "conversational_chat": "Non-chat bubble look. Look like a screenplay format. Bold names (DIRECTOR, YOU), indented text."
+    "loop_strip": {
+      "description": "Signature brand device. A continuous marque or horizontal flex of the closed loop.",
+      "items": ["INTENT", "STORY", "DIRECT", "CAPTURE", "UNDERSTAND", "EVALUATE", "DETECT GAP", "GET THE SHOT", "CAPTURE AGAIN", "RE-EVALUATE", "EDIT", "LEARN"],
+      "styling": "Font-technical or small font-body, uppercase, tracking-widest, separated by dots or arrows. Subtle opacity (50%) for inactive steps, Golden Hour for active step."
+    },
+    "buttons": {
+      "primary": "bg-[#D6A85F] text-[#171714] hover:bg-[#c2954e] font-body rounded-full px-6 py-3 transition-transform active:scale-95",
+      "secondary": "border border-[#171714]/20 dark:border-[#F7F3EA]/20 text-current hover:bg-[#171714]/5 dark:hover:bg-[#F7F3EA]/5 rounded-full px-6 py-3",
+      "ai_action": "bg-[#7267A8] text-[#FFFDF8] hover:bg-[#5f5591] rounded-full px-6 py-3 shadow-[0_0_15px_rgba(114,103,168,0.4)]"
+    },
+    "plan_cards": {
+      "styling": "bg-[#FFFDF8] border border-[#171714]/10 rounded-2xl p-8. Recommended tier gets Golden Hour border and subtle drop shadow.",
+      "usage_meters": "JetBrains Mono for numbers. Progress bar uses Golden Hour for standard usage, Sage Film for optimal/under-limit, red/warning if nearing limit."
+    },
+    "experience_cards": {
+      "styling": "Editorial layout. Large image taking up 70% of card height, 30% text content below. Subtle borders, no heavy shadows. Images must have a slight vignette or overlay to ensure text contrast if text is placed over them (bg-black/30 maximum)."
+    },
+    "video_monitor": {
+      "styling": "Dark cinematic workspace component. Pure Lumiere Ink background for the player area to enhance contrast. Sharp corners, minimalistic controls. Use Iris AI for 'Enhance' or 'AI Edit' buttons overlay."
+    },
+    "music_picker": {
+      "styling": "List view with waveforms. Play button on left, track name in Playfair Display, duration in JetBrains Mono, 'Apply' button on right. Hover state highlights row in subtle Golden Hour tint."
+    },
+    "nav_header": {
+      "styling": "Glassmorphism: backdrop-blur-xl bg-[#F7F3EA]/70 (light) or bg-[#171714]/70 (dark). Includes Logo, Navigation links, Language toggle (ES/EN), and Avatar menu."
+    }
   },
   "motion": {
-    "transitions": "Slow, deliberate cinematic transitions (0.4s to 0.6s ease-in-out).",
-    "micro_interactions": "Hover states should slightly lift or increase border opacity. 'GET THE SHOT' button should have a continuous subtle pulse.",
-    "loading": "Do not use standard spinners. Use a blinking cursor or a progressing timecode / frame counter [00:00:24:12]."
+    "light_to_dark_transition": "Cinematic 'projection room' transition. When moving from a light route (Home) to a dark route (Editing Studio), use a dramatic background color fade (duration: 0.8s, ease: 'easeInOut') simulating lights dimming in a theater.",
+    "hover_states": "Subtle y-axis lift (-translate-y-1) and opacity shifts. Never use 'transition-all', specify 'transition-transform transition-opacity transition-colors'."
   },
-  "media": {
-    "image_urls": {
-      "placeholder_camera": {
-        "url": "https://images.unsplash.com/photo-1607276159787-9ef4db5c0d0b?crop=entropy&cs=srgb&fm=jpg&q=85",
-        "description": "Black and silver DSLR camera on tripod. Use for 'Upload Footage' empty state."
-      },
-      "mission_neon": {
-        "url": "https://images.unsplash.com/photo-1601042879364-f3947d3f9c16?crop=entropy&cs=srgb&fm=jpg&q=85",
-        "description": "Wet street at night with neon. Use as a background for 'Missing Shot' or 'GET THE SHOT' mission cards."
-      },
-      "director_avatar": {
-        "url": "https://images.pexels.com/photos/29433729/pexels-photo-29433729.png?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-        "description": "Artistic dramatic shadow portrait. Use for the 'LUMIÈRE AI Director' avatar in the chat."
-      }
+  "image_urls": {
+    "hero_landscape": {
+      "url": "https://images.pexels.com/photos/34033016/pexels-photo-34033016.jpeg",
+      "description": "Majestic Milford Sound fjord in New Zealand"
     },
-    "instructions": "All imagery must feel cinematic. For missing footage states, blur the background image heavily and overlay the 'GET THE SHOT' action."
+    "ai_generation_state": {
+      "url": "https://images.pexels.com/photos/34112214/pexels-photo-34112214.jpeg",
+      "description": "Captivating mist over a Transylvanian mountain peak"
+    },
+    "experience_luxury_yacht": {
+      "url": "https://images.unsplash.com/photo-1782835576404-f5eaddd63ac3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA4Mzl8MHwxfHNlYXJjaHwyfHxsdXh1cnklMjBsaWZlc3R5bGUlMjB0cmF2ZWx8ZW58MHx8fHwxNzg4MTEzMTM3fDA&ixlib=rb-4.1.0&q=85",
+      "description": "A white yacht sails past buildings framed by trees"
+    },
+    "experience_resort": {
+      "url": "https://images.unsplash.com/photo-1782714040856-cf19b8ba888b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA4Mzl8MHwxfHNlYXJjaHw0fHxsdXh1cnklMjBsaWZlc3R5bGUlMjB0cmF2ZWx8ZW58MHx8fHwxNzg4MTEzMTM3fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Luxury resort pools overlooking a serene lake"
+    },
+    "avatar_editorial": {
+      "url": "https://images.unsplash.com/photo-1568038479111-87bf80659645?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODh8MHwxfHNlYXJjaHwyfHxlZGl0b3JpYWwlMjBwb3J0cmFpdHxlbnwwfHx8fDE3ODgxMTMxMzd8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Close up editorial portrait of blonde hair person"
+    },
+    "empty_state_slate": {
+      "url": "https://images.unsplash.com/photo-1485846234645-a62644f84728?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODB8MHwxfHNlYXJjaHwxfHxmaWxtJTIwcHJvZHVjdGlvbiUyMGJlaGluZCUyMHRoZSUyMHNjZW5lc3xlbnwwfHx8fDE3ODgxMTMxMzd8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Clap board roadside film production"
+    }
   },
   "accessibility": {
-    "contrast": "Ensure text meets 4.5:1 ratio against #121212. Use text-shadow over any media.",
-    "data_testid": "Apply data-testid attributes to all interactive elements (buttons, inputs, video controls, toggles).",
-    "reduced_motion": "Respect prefers-reduced-motion media query for pulsing and heavy transitions."
+    "contrast": "Ensure APCA contrast standards. Golden Hour must have dark text on it. Iris AI must have light text on it.",
+    "testing": "All interactive elements MUST include 'data-testid' attribute (e.g., data-testid='login-button').",
+    "reduced_motion": "Respect 'prefers-reduced-motion' by disabling the projection room transition."
   },
-  "libraries_and_setup": {
-    "required_packages": [
-      "lucide-react",
-      "framer-motion",
-      "recharts",
-      "clsx",
-      "tailwind-merge",
-      "sonner"
-    ],
-    "instructions_to_main_agent": "1. Initialize Tailwind with the provided color palette. 2. Fetch fonts via Google Fonts (Playfair Display, Manrope, JetBrains Mono) in index.css. 3. Build Shadcn components (Progress, Button, Input) but STRIP all Vercel/default border radii, making them sharp and editorial. 4. Implement the ES/EN translation logic using a simple React Context or i18n hook."
-  },
-  "universal_guidelines_for_main_agent": [
-    "You MUST NOT apply universal transition (e.g., transition: all).",
-    "You MUST NOT center align the app container (.App { text-align: center; } is FORBIDDEN).",
-    "DO NOT use dark colors as gradients.",
-    "DO NOT use generic centered layouts or uniform styling. Embrace asymmetry.",
-    "Create depth through layered design elements with z-index hierarchy, not drop shadows.",
-    "NEVER use emojis as icons. Use lucide-react (thin strokes).",
-    "NEVER use placeholder image URLs (like via.placeholder.com). Use the curated images provided.",
-    "All interactive elements MUST have micro-animations and explicit hover states.",
-    "Use sonner for toast notifications.",
-    "Ensure 'LUMIÈRE' feels like a premium, professional color-grading suite or video editor."
+  "instructions_to_main_agent": [
+    "Strictly follow the color palette. Do NOT introduce new colors outside the Master Specification.",
+    "Maintain the editorial, luxury-travel personality. Use generous whitespace (p-12, p-16) and avoid cramped SaaS layouts.",
+    "Ensure Profile/Account screens contain ZERO video players. Do NOT render videos inside the user profile.",
+    "Implement the INTENT -> STORY -> DIRECT ... loop strip prominently on the Landing/Home pages.",
+    "Use JetBrains Mono exclusively for metrics, usage numbers, and technical readouts. Use Playfair Display for big impactful headings.",
+    "Implement the 'projection room' transition when crossing between light (e.g., Home) and dark (e.g., Studio) routes.",
+    "Iris AI color (#7267A8) MUST ONLY be used for AI features (generation, enhancement, Agent Trace).",
+    "Do NOT use emojis in the UI. Keep it professional, cinematic, and premium."
+  ],
+  "universal_guidelines": [
+    "Avoid generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "MUST NOT apply universal transition (transition: all).",
+    "MUST NOT center align the app container in css.",
+    "Always use modern button styles with interaction animations.",
+    "NEVER use AI assistant Emoji characters.",
+    "Use 2-3x more spacing than feels comfortable.",
+    "Add subtle grain textures, noise overlays, custom cursors.",
+    "Prioritize using pre-existing components from src/components/ui.",
+    "Use sonner for toasts.",
+    "All interactive elements MUST include data-testid attribute."
   ]
 }

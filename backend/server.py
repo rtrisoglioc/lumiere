@@ -13,6 +13,9 @@ import storage
 import ffmpeg_worker as ff
 from agent_adapter import agent_builder
 from partner_adapter import partner
+from vertex_video_adapter import vertex_video
+import plans as plan_catalog
+import music as music_lib
 import agents
 from auth import exchange_session, get_current_user, logout as do_logout
 
@@ -40,6 +43,23 @@ class PlanIn(BaseModel):
 
 class ReviseIn(BaseModel):
     instruction: str
+    music_id: str = None
+
+class CutIn(BaseModel):
+    music_id: str = None
+
+class PlanIn2(BaseModel):
+    plan: str
+
+class VideoGenIn(BaseModel):
+    prompt: str
+    aspect_ratio: str = "16:9"
+    duration_sec: int = 6
+    style: str = "cinematic"
+
+class VideoEnhanceIn(BaseModel):
+    asset_id: str
+    mode: str = "enhance"
 
 
 # ---------- helpers ----------
@@ -141,7 +161,20 @@ async def render_cut_task(exp_id: str, cut_id: str):
         if not result.get("ok"):
             await db.cut_versions.update_one({"id": cut_id}, {"$set": {"status": "failed", "error": result.get("error")}})
             return
-        data = out.read_bytes()
+
+        final = out
+        music_id = cut.get("music_id")
+        if music_id:
+            track = await music_lib.get_track(music_id)
+            if track:
+                mpath = await asyncio.to_thread(storage.ensure_local, exp_id, "music",
+                                                f"{music_id}.mp3", track["storage_path"])
+                scored = WORKDIR / exp_id / "cuts" / f"{cut_id}_scored.mp4"
+                ok = await asyncio.to_thread(ff.add_music, out, mpath, scored)
+                if ok:
+                    final = scored
+
+        data = final.read_bytes()
         storage_path = f"{storage.APP_NAME}/derivatives/{exp_id}/{cut_id}.mp4"
         put = await asyncio.to_thread(storage.put_object, storage_path, data, "video/mp4")
         await db.cut_versions.update_one(
@@ -304,7 +337,7 @@ async def _next_version(exp_id: str) -> int:
     return (last[0]["version"] + 1) if last else 1
 
 @api.post("/experiences/{exp_id}/cut")
-async def make_cut(exp_id: str, background: BackgroundTasks, user: dict = Depends(get_current_user)):
+async def make_cut(exp_id: str, background: BackgroundTasks, body: CutIn = CutIn(), user: dict = Depends(get_current_user)):
     exp = await get_experience(exp_id, user)
     if not exp.get("plan"):
         raise HTTPException(status_code=400, detail="No plan yet")
@@ -329,6 +362,7 @@ async def make_cut(exp_id: str, background: BackgroundTasks, user: dict = Depend
         "kind": "initial",
         "instruction": None,
         "edl": edl,
+        "music_id": body.music_id,
         "editor_meta": {k: edl_out.get(k) for k in ("rationale", "target_duration_sec", "confidence")} if isinstance(edl_out, dict) else {},
         "status": "rendering",
         "storage_path": None,
@@ -372,6 +406,7 @@ async def revise_cut(cut_id: str, body: ReviseIn, background: BackgroundTasks, u
         "kind": "revision",
         "instruction": body.instruction,
         "edl": edl,
+        "music_id": body.music_id or parent.get("music_id"),
         "edit_decisions": out.get("edit_decisions") if isinstance(out, dict) else [],
         "requires_confirmation": out.get("requires_confirmation", False) if isinstance(out, dict) else False,
         "reviser_summary": out.get("summary") if isinstance(out, dict) else None,
@@ -390,6 +425,90 @@ async def revise_cut(cut_id: str, body: ReviseIn, background: BackgroundTasks, u
 async def agent_runs(exp_id: str, user: dict = Depends(get_current_user)):
     await get_experience(exp_id, user)
     return await db.agent_runs.find({"experience_id": exp_id}, {"_id": 0}).sort("created_at", 1).to_list(500)
+
+
+# ---------- account / pricing / usage ----------
+async def compute_usage(user: dict) -> dict:
+    uid = user["user_id"]
+    exp_count = await db.experiences.count_documents({"owner": uid})
+    cut_count = await db.cut_versions.count_documents({"owner": uid})
+    gen_count = await db.video_jobs.count_documents({"owner": uid})
+    return {"experiences": exp_count, "cuts": cut_count, "ai_generations": gen_count}
+
+
+@api.get("/account")
+async def get_account(user: dict = Depends(get_current_user)):
+    plan_id = user.get("plan") or "free"
+    plan = plan_catalog.get_plan(plan_id)
+    usage = await compute_usage(user)
+    return {"user": {k: user.get(k) for k in ("user_id", "email", "name", "picture")},
+            "plan": plan, "usage": usage, "limits": plan["limits"]}
+
+
+@api.get("/pricing/plans")
+async def pricing_plans(user: dict = Depends(get_current_user)):
+    return {"plans": plan_catalog.PLANS, "faq": plan_catalog.FAQ,
+            "current_plan": user.get("plan") or "free", "version": plan_catalog.PLANS_VERSION}
+
+
+@api.post("/account/plan")
+async def set_plan(body: PlanIn2, user: dict = Depends(get_current_user)):
+    plan = plan_catalog.get_plan(body.plan)
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"plan": plan["id"]}})
+    return {"ok": True, "plan": plan}
+
+
+# ---------- stock music (CC0) ----------
+@api.get("/music")
+async def get_music(user: dict = Depends(get_current_user)):
+    return await music_lib.list_tracks()
+
+
+# ---------- AI video (Vertex/Veo — mocked adapter) ----------
+@api.get("/video/health")
+async def video_health():
+    return vertex_video.status()
+
+
+@api.post("/video/generate")
+async def video_generate(body: VideoGenIn, user: dict = Depends(get_current_user)):
+    result = vertex_video.generate(body.prompt, body.model_dump())
+    job = {
+        "id": str(uuid.uuid4()),
+        "owner": user["user_id"],
+        "kind": "generate",
+        "prompt": body.prompt,
+        "options": body.model_dump(),
+        "status": result["status"],
+        "result": result,
+        "created_at": now_iso(),
+    }
+    await db.video_jobs.insert_one(dict(job))
+    job.pop("_id", None)
+    return job
+
+
+@api.post("/video/enhance")
+async def video_enhance(body: VideoEnhanceIn, user: dict = Depends(get_current_user)):
+    result = vertex_video.enhance(body.asset_id, body.model_dump())
+    job = {
+        "id": str(uuid.uuid4()),
+        "owner": user["user_id"],
+        "kind": "enhance",
+        "asset_id": body.asset_id,
+        "options": body.model_dump(),
+        "status": result["status"],
+        "result": result,
+        "created_at": now_iso(),
+    }
+    await db.video_jobs.insert_one(dict(job))
+    job.pop("_id", None)
+    return job
+
+
+@api.get("/video/jobs")
+async def video_jobs(user: dict = Depends(get_current_user)):
+    return await db.video_jobs.find({"owner": user["user_id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
 
 
 # ---------- file streaming ----------
@@ -424,6 +543,11 @@ async def startup():
         logger.info("Object storage initialized")
     except Exception as e:
         logger.error(f"Storage init failed: {e}")
+    try:
+        await music_lib.seed_music()
+        logger.info("Music library seeded")
+    except Exception as e:
+        logger.error(f"Music seed failed: {e}")
 
 
 app.include_router(api)
