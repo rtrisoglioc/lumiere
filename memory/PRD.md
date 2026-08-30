@@ -65,3 +65,10 @@ LUMIÈRE turns real lived experiences into cinema through an agentic closed loop
 - Planning latency reduced to ~24s (<30s) using gemini flash for planning agents.
 - Env vars introduced: GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION, GOOGLE_APPLICATION_CREDENTIALS_JSON, VERTEX_AGENT_ENGINE_ID, PARALLEL_API_KEY.
 - Still not connected (awaiting secrets): Vertex/Agent Builder (GOOGLE_APPLICATION_CREDENTIALS_JSON), Parallel (PARALLEL_API_KEY). Veo remains optional/mock. No prohibited AI providers present.
+
+## Phase B-1 (2026-06) — ADK package + deploy prep (NOT deployed)
+- Created `backend/adk_app/` (isolated from serving runtime): `agent.py` root `lumiere_orchestrator`, `subagents.py` (Context+Parallel tool, Director, Cinematographer, Vision[gs:// multimodal], Evaluator, Editor, Reviser), `__init__.py`, `requirements-deploy.txt` (google-adk 2.8.0, aiplatform[adk,agent_engines] 1.148.1, google-genai 2.20.0).
+- `backend/deploy_agent_engine.py`: one-off `agent_engines.create(AdkApp(root, enable_tracing=True))` → creates ONE reasoningEngine; guarded (exits if no creds); prints REASONING_ENGINE_NAME for VERTEX_AGENT_ENGINE_ID.
+- `backend/gcs_media.py`: GCS upload → gs:// URI bridge for Vision path (lazy import, graceful not_configured).
+- Env vars added (empty placeholders): GCS_BUCKET, GCS_STAGING_BUCKET, PARALLEL_MODE.
+- Nothing deployed. Golden path verified intact (existing exp: 2 media, 3 cuts). adk_app not imported by runtime; google-adk NOT installed in serving env (deploy-time only).
