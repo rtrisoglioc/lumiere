@@ -1,0 +1,79 @@
+"""Real (non-AI) media processing with FFmpeg.
+
+Validates media, extracts segments and renders a real cut from a structured EDL.
+Originals are never modified; every render is a new derivative file.
+"""
+import json
+import subprocess
+from pathlib import Path
+
+
+def _run(cmd: list) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+
+
+def probe(path: str) -> dict:
+    cmd = [
+        "ffprobe", "-v", "error", "-show_entries",
+        "format=duration:stream=codec_type,width,height",
+        "-of", "json", str(path),
+    ]
+    r = _run(cmd)
+    if r.returncode != 0:
+        return {"ok": False, "error": r.stderr[-400:]}
+    data = json.loads(r.stdout or "{}")
+    streams = data.get("streams", [])
+    has_audio = any(s.get("codec_type") == "audio" for s in streams)
+    has_video = any(s.get("codec_type") == "video" for s in streams)
+    duration = float(data.get("format", {}).get("duration", 0) or 0)
+    return {"ok": True, "duration": duration, "has_audio": has_audio, "has_video": has_video}
+
+
+def normalize_segment(src: str, start: float, end: float, out: Path, has_audio: bool) -> bool:
+    """Trim [start,end] and normalize to 1280x720/30fps + stereo audio."""
+    dur = max(0.3, float(end) - float(start))
+    vf = ("scale=1280:720:force_original_aspect_ratio=decrease,"
+          "pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30")
+    cmd = ["ffmpeg", "-y", "-ss", str(max(0, float(start))), "-t", str(dur), "-i", str(src)]
+    if not has_audio:
+        cmd += ["-f", "lavfi", "-t", str(dur), "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"]
+    cmd += [
+        "-vf", vf, "-r", "30",
+        "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-ar", "48000", "-ac", "2",
+        "-map", "0:v:0",
+    ]
+    cmd += ["-map", ("1:a:0" if not has_audio else "0:a:0"), "-shortest", str(out)]
+    r = _run(cmd)
+    return r.returncode == 0 and out.exists()
+
+
+def render_cut(edl_clips: list, resolver, tmp_dir: Path, out_path: Path) -> dict:
+    """edl_clips: [{asset_id, segment_start_sec, segment_end_sec, order}].
+    resolver(asset_id) -> (local_path, has_audio). Returns render result dict.
+    """
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    ordered = sorted(edl_clips, key=lambda c: c.get("order", 0))
+    seg_files = []
+    for i, clip in enumerate(ordered):
+        resolved = resolver(clip["asset_id"])
+        if not resolved:
+            continue
+        src, has_audio = resolved
+        seg_out = tmp_dir / f"seg_{i:03d}.mp4"
+        ok = normalize_segment(src, clip.get("segment_start_sec", 0), clip.get("segment_end_sec", 3), seg_out, has_audio)
+        if ok:
+            seg_files.append(seg_out)
+
+    if not seg_files:
+        return {"ok": False, "error": "no_usable_segments"}
+
+    list_file = tmp_dir / "concat.txt"
+    list_file.write_text("".join(f"file '{f.as_posix()}'\n" for f in seg_files))
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    r = _run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(list_file), "-c", "copy", str(out_path)])
+    if r.returncode != 0 or not out_path.exists():
+        return {"ok": False, "error": r.stderr[-400:]}
+
+    info = probe(str(out_path))
+    return {"ok": True, "clips": len(seg_files), "duration": info.get("duration", 0), "path": str(out_path)}

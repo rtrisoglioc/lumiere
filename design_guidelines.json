@@ -1,0 +1,117 @@
+{
+  "theme": "dark",
+  "typography": {
+    "fonts": {
+      "headings": "Playfair Display",
+      "body": "Manrope",
+      "mono": "JetBrains Mono"
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl font-black tracking-tighter uppercase",
+      "h2": "text-2xl sm:text-3xl font-bold tracking-tight",
+      "h3": "text-xl sm:text-2xl font-medium tracking-tight",
+      "body": "text-base leading-relaxed text-zinc-300",
+      "labels": "text-xs font-mono uppercase tracking-[0.2em] text-zinc-500",
+      "technical": "text-sm font-mono text-cyan-400"
+    },
+    "instructions": "Use Playfair Display for all cinematic and storytelling headers. Use JetBrains Mono for AI confidence scores, agent names, and metadata. Manrope for conversational UI and standard readability. Never use Inter for headings."
+  },
+  "colors": {
+    "background": {
+      "base": "#050505",
+      "surface": "#121212",
+      "surfaceHover": "#1C1C1C",
+      "glass": "rgba(18, 18, 18, 0.7)"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#A1A1AA",
+      "muted": "#71717A"
+    },
+    "accents": {
+      "primary": "#E55900",
+      "primaryHover": "#FF6B00",
+      "technical": "#06B6D4",
+      "success": "#10B981",
+      "warning": "#F59E0B",
+      "danger": "#EF4444"
+    },
+    "borders": {
+      "subtle": "rgba(255, 255, 255, 0.08)",
+      "active": "rgba(255, 255, 255, 0.2)"
+    },
+    "instructions": "Adopt the 'Midnight Projection Room' archetype. UI must recede to let content (video/images) pop. Do not use generic SaaS blues. Accent color is a 'Cinematic Orange' used sparingly for critical actions like 'GET THE SHOT'. Technical AI traces use Cyan for contrast."
+  },
+  "visual_enhancers": {
+    "borders": "1px solid rgba(255, 255, 255, 0.08)",
+    "radius": "rounded-none or max rounded-sm (2px-4px) for a sharp, editorial film-cut aesthetic.",
+    "shadows": "Ambient glows instead of drop shadows. Use drop-shadow-[0_0_15px_rgba(229,89,0,0.15)] for primary actions.",
+    "textures": "Include a subtle film grain overlay (noise) on the background body to prevent pure digital flatness. You can use an SVG filter or a CSS radial gradient noise.",
+    "decorations": "Use 'Crosshairs' (+) in the corners of main video player and dashboard cards to simulate a camera viewfinder."
+  },
+  "layouts_and_grids": {
+    "mobile_first": "PWA optimized. Use a bottom-docked navigation bar for mobile instead of a top hamburger menu.",
+    "spacing": "Generous padding. p-6 or p-8 inside cards. gap-6 between grid items.",
+    "bento_grid": "For 'Story Completeness', use a highly dense, asymmetrical grid (Mode B). Combine radial charts and progress bars seamlessly.",
+    "agent_traceability": "Render as a terminal-like cascading list, utilizing monospace fonts, displaying Latency and Confidence with strict alignment.",
+    "instructions": "Avoid symmetrical, boring grids. The 'Create Experience' and 'Story Intent' sections should feel like full-screen immersive conversational cards."
+  },
+  "components": {
+    "buttons": "Sharp edges (rounded-sm), high contrast. 'Primary' buttons use cinematic orange. 'Secondary' buttons are transparent with 1px border. Always use explicit hover states.",
+    "cards": "Flat surfaces (surface color), no shadows, 1px subtle borders. For 'Shot Missions', use a highlighted left border (e.g., border-l-2 border-primary) to show active status.",
+    "video_player": "Must be central, prominent, wrapped in a 1px border with padding (to look like a film monitor). Include 'Timecode' overlays in monospace.",
+    "upload_states": "Uploading -> Processing -> Analyzing -> Selecting -> Editing -> Ready. Use a visual timeline or stepping progress component with smooth transitions.",
+    "language_toggle": "A crisp, small toggle in the header or bottom dock [ES / EN].",
+    "conversational_chat": "Non-chat bubble look. Look like a screenplay format. Bold names (DIRECTOR, YOU), indented text."
+  },
+  "motion": {
+    "transitions": "Slow, deliberate cinematic transitions (0.4s to 0.6s ease-in-out).",
+    "micro_interactions": "Hover states should slightly lift or increase border opacity. 'GET THE SHOT' button should have a continuous subtle pulse.",
+    "loading": "Do not use standard spinners. Use a blinking cursor or a progressing timecode / frame counter [00:00:24:12]."
+  },
+  "media": {
+    "image_urls": {
+      "placeholder_camera": {
+        "url": "https://images.unsplash.com/photo-1607276159787-9ef4db5c0d0b?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "description": "Black and silver DSLR camera on tripod. Use for 'Upload Footage' empty state."
+      },
+      "mission_neon": {
+        "url": "https://images.unsplash.com/photo-1601042879364-f3947d3f9c16?crop=entropy&cs=srgb&fm=jpg&q=85",
+        "description": "Wet street at night with neon. Use as a background for 'Missing Shot' or 'GET THE SHOT' mission cards."
+      },
+      "director_avatar": {
+        "url": "https://images.pexels.com/photos/29433729/pexels-photo-29433729.png?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Artistic dramatic shadow portrait. Use for the 'LUMIÈRE AI Director' avatar in the chat."
+      }
+    },
+    "instructions": "All imagery must feel cinematic. For missing footage states, blur the background image heavily and overlay the 'GET THE SHOT' action."
+  },
+  "accessibility": {
+    "contrast": "Ensure text meets 4.5:1 ratio against #121212. Use text-shadow over any media.",
+    "data_testid": "Apply data-testid attributes to all interactive elements (buttons, inputs, video controls, toggles).",
+    "reduced_motion": "Respect prefers-reduced-motion media query for pulsing and heavy transitions."
+  },
+  "libraries_and_setup": {
+    "required_packages": [
+      "lucide-react",
+      "framer-motion",
+      "recharts",
+      "clsx",
+      "tailwind-merge",
+      "sonner"
+    ],
+    "instructions_to_main_agent": "1. Initialize Tailwind with the provided color palette. 2. Fetch fonts via Google Fonts (Playfair Display, Manrope, JetBrains Mono) in index.css. 3. Build Shadcn components (Progress, Button, Input) but STRIP all Vercel/default border radii, making them sharp and editorial. 4. Implement the ES/EN translation logic using a simple React Context or i18n hook."
+  },
+  "universal_guidelines_for_main_agent": [
+    "You MUST NOT apply universal transition (e.g., transition: all).",
+    "You MUST NOT center align the app container (.App { text-align: center; } is FORBIDDEN).",
+    "DO NOT use dark colors as gradients.",
+    "DO NOT use generic centered layouts or uniform styling. Embrace asymmetry.",
+    "Create depth through layered design elements with z-index hierarchy, not drop shadows.",
+    "NEVER use emojis as icons. Use lucide-react (thin strokes).",
+    "NEVER use placeholder image URLs (like via.placeholder.com). Use the curated images provided.",
+    "All interactive elements MUST have micro-animations and explicit hover states.",
+    "Use sonner for toast notifications.",
+    "Ensure 'LUMIÈRE' feels like a premium, professional color-grading suite or video editor."
+  ]
+}

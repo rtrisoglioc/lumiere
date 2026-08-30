@@ -1,0 +1,41 @@
+{
+  "summary": "Frontend + integration testing of LUMIÈRE Agentic Experience Studio completed successfully with seeded session token e2e_1788105676 and pre-seeded experience f3f5a6a6-6f9c-4ee9-8b8e-21dd6ae1975d. All auth gating, dashboard, workspace tabs (Story/Capture/Evaluate/Edit/Trace), language toggle, and new-experience dialog work as specified. Backend integration (media URLs signed with lumiere_token, agent runs, rendered cuts) is properly wired.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "New Experience dialog / any Radix Dialog", "issues": ["Console warning: Missing `Description` or `aria-describedby` for DialogContent. Add DialogDescription or aria-describedby to each DialogContent for a11y compliance."]}
+    ]
+  },
+  "test_results": {
+    "landing_unauthenticated_shows_continue_with_google": true,
+    "authenticated_/studio_no_redirect_to_/": true,
+    "dashboard_lists_seeded_experience_Coastal_Road_Trip": true,
+    "new_experience_dialog": {"experience-title-input": 1, "type-travel": 1, "confirm-create-button": 1},
+    "workspace_tabs_render": {"tab-story": 1, "tab-capture": 1, "tab-evaluate": 1, "tab-edit": 1, "tab-trace": 1},
+    "story_tab": {"plan-title": 1, "beats": 5, "missions": 8},
+    "capture_tab": {"file_inputs_per_mission": 8},
+    "evaluate_tab": {"overall-score": 1, "gts_cards": 9, "evaluate-button": 1},
+    "edit_tab": {"cut-player": 1, "revise-input": 1, "apply-edit-button": 1, "render-cut-button": 1, "V1_visible": true, "V2_visible": true, "video_src_signed_with_auth_token": true, "video_src_example": "/api/files/lumiere/derivatives/{exp_id}/{uuid}.mp4?auth=e2e_1788105676"},
+    "trace_tab": {"agent_builder_NOT_CONNECTED_shown": true, "partner_MOCK_NOT_CONNECTED_shown": true, "agent-run-*_count": 7, "expected_runs_present": "director, cinematographer, vision x2, evaluator, editor, reviser"},
+    "language_toggle": {"lang-en_present": true, "lang-es_present": true, "labels_switched_to_Spanish_verified_via_screenshot": true, "example_es_labels": "HISTORIA, CAPTURA, EVALUAR, EDITAR, TRAZAS, ORQUESTACIÓN, AGENT BUILDER: SIN CONECTAR, MOCK · SIN CONECTAR"}
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Minor a11y) Add DialogDescription or aria-describedby to each Radix DialogContent (e.g. New Experience dialog) to remove console warning."
+  ],
+  "critical_code_review_comments": [
+    "Adapters (AgentBuilderAdapter direct_gemini + PartnerAdapter mock) are correctly surfaced as NOT CONNECTED / MOCK in the Trace tab — intentional and matches the review request.",
+    "Media file URLs correctly include ?auth=<lumiere_token> from localStorage — signed access works and the video src verifies token is injected.",
+    "Radix Dialog a11y: DialogContent instances are missing an accessible description (console warning). Low priority."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (skipped per request)", "frontend": "100%"},
+  "test_credentials": "Session token e2e_1788105676 (from /app/memory/test_credentials.md). GET /api/auth/me returned 200 for user_e2e_1788105676. Cookie name session_token + localStorage lumiere_token both set before navigation, per /app/auth_testing.md.",
+  "seed_data_creation": "None — used pre-seeded experience f3f5a6a6-6f9c-4ee9-8b8e-21dd6ae1975d and pre-seeded session e2e_1788105676.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Auth pattern that works for Playwright: (1) context.add_cookies with session_token cookie for the preview host (secure=True, sameSite=None, httpOnly=True), AND (2) context.add_init_script to set localStorage.lumiere_token BEFORE any goto. After that /studio and /studio/:id load without any redirect. The seeded experience contains full agent trace (7 runs), 9 GTS cards, and 2 rendered cut versions (V1 + V2) — good for pure UI regression without needing to run Gemini (~45s planning) again. The optional new-experience creation flow was not exercised end-to-end (Gemini planning long-running) but the dialog fields render correctly.",
+  "rca of the issue": "No issues found. All described features render and integrate correctly."
+}

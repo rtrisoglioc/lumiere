@@ -1,0 +1,9 @@
+{
+  "short_name": "LUMIÈRE",
+  "name": "LUMIÈRE — Agentic Experience Studio",
+  "start_url": "/studio",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "icons": []
+}
