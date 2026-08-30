@@ -56,3 +56,12 @@ LUMIÈRE turns real lived experiences into cinema through an agentic closed loop
 - Connect Vertex AI (Veo) for real video generation/enhancement (swap VertexVideoAdapter body) — needs GCP creds.
 - Connect Google Agent Builder + select partner track; real payment processing for Pricing.
 - Planning latency <30s.
+
+## Hackathon Compliance — Phase A (2026-06, additive, P0 preserved)
+- Secrets/repo hygiene: `.gitignore` now excludes all `.env`; added `backend/.env.example`, `frontend/.env.example`, root `LICENSE` (MIT), `README.md`. No secrets in `.py`. `EMERGENT_LLM_KEY` kept only in git-ignored `.env` (dev + object-storage init).
+- Compliance Trace: every AgentRun now records `service`, `operation`, `status`, `timestamp`, `correlation_id`; Trace UI shows Google Cloud (Vertex/Agent Builder) + Partner (Parallel) participation and per-run svc/op/status/run-id.
+- Production adapters (activate automatically when secrets exist, else graceful not_connected): `vertex_gemini_adapter.py` (Gemini via Vertex AI, google-genai, lazy import), `agent_adapter.py` real routing (vertex-agent-engine → vertex-ai → emergent-proxy dev fallback), `partner_adapter.py` = ParallelPartnerAdapter (real POST /v1/search, x-api-key).
+- Context Agent added BEFORE Story Plan: calls Parallel Search at runtime; its context is passed into Director + Cinematographer prompts (materially influences plan/missions when connected). Shared correlation_id across context→director→cinematographer.
+- Planning latency reduced to ~24s (<30s) using gemini flash for planning agents.
+- Env vars introduced: GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION, GOOGLE_APPLICATION_CREDENTIALS_JSON, VERTEX_AGENT_ENGINE_ID, PARALLEL_API_KEY.
+- Still not connected (awaiting secrets): Vertex/Agent Builder (GOOGLE_APPLICATION_CREDENTIALS_JSON), Parallel (PARALLEL_API_KEY). Veo remains optional/mock. No prohibited AI providers present.

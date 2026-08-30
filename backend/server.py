@@ -256,14 +256,18 @@ async def get_experience_full(exp_id: str, user: dict = Depends(get_current_user
 @api.post("/experiences/{exp_id}/plan")
 async def make_plan(exp_id: str, body: PlanIn, user: dict = Depends(get_current_user)):
     exp = await get_experience(exp_id, user)
-    plan, pmeta = await agents.director_plan(exp, body.intent)
+    correlation_id = str(uuid.uuid4())
+    context, cmeta = await agents.context_agent(exp, body.intent, correlation_id)
+    plan, pmeta = await agents.director_plan(exp, body.intent, context, correlation_id)
     exp["plan"] = plan
-    missions, mmeta = await agents.cinematographer_missions(exp, plan)
+    missions, mmeta = await agents.cinematographer_missions(exp, plan, context, correlation_id)
     await db.experiences.update_one(
         {"id": exp_id},
-        {"$set": {"intent": body.intent, "plan": plan, "missions": missions, "stage": "capture"}},
+        {"$set": {"intent": body.intent, "context": context, "plan": plan, "missions": missions,
+                  "stage": "capture", "correlation_id": correlation_id}},
     )
-    return {"plan": plan, "missions": missions,
+    return {"plan": plan, "missions": missions, "context": context, "correlation_id": correlation_id,
+            "partner_connected": bool(context.get("ok")),
             "latency_ms": (pmeta.get("latency_ms", 0) + mmeta.get("latency_ms", 0))}
 
 

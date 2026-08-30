@@ -1,56 +1,79 @@
 """Agentic orchestration adapter.
 
-MODULAR BOUNDARY. In production this routes agent runs to Google Cloud Agent
-Builder / Vertex AI Agent Engine. That runtime is provisioned in the user's GCP
-project (billing + service accounts + agents + data stores) and is NOT connected
-in this environment.
+Routes each agent run to the best available runtime:
+  1. Google Cloud Vertex AI Agent Engine (Agent Builder) — when an engine id +
+     credentials are configured (service="vertex-agent-engine").
+  2. Google Cloud Vertex AI Gemini direct — when GCP credentials are present
+     (service="vertex-ai").
+  3. Emergent Gemini proxy — dev-only fallback (service="emergent-proxy").
 
-Until GCP credentials are provided, `orchestration_backend = "direct_gemini"`:
-the agents' reasoning is REAL (Gemini multimodal via the approved Emergent
-surface), but the Agent Builder orchestration runtime itself is not connected.
-This is flagged honestly in the UI traceability panel. Swap the `run` body to
-call Agent Engine sessions without changing any domain code.
+All AI reasoning is Google Gemini. No other AI providers are used at runtime.
+The production Google Cloud path (1/2) activates automatically once secrets are
+set; no code change required.
 """
 import os
 import re
 import json
 import time
+import asyncio
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
+import vertex_gemini_adapter as vertex
 
 EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
-GEMINI_MODEL = "gemini-3.1-pro-preview"
+PROXY_FAST = "gemini-3.5-flash"
+PROXY_PRO = "gemini-3.1-pro-preview"
 
 
 class AgentBuilderAdapter:
-    orchestration_backend = "direct_gemini"
-    agent_builder_connected = False  # flip to True once GCP Agent Engine is wired
     provider = "google"
-    model = GEMINI_MODEL
 
     def status(self) -> dict:
+        v = vertex.status()
+        if v["connected"] and v["agent_engine_configured"]:
+            backend, service, connected = "vertex-agent-engine", "vertex-agent-engine", True
+        elif v["connected"]:
+            backend, service, connected = "vertex-ai", "vertex-ai", True
+        else:
+            backend, service, connected = "emergent-proxy", "emergent-proxy", False
         return {
-            "orchestration_backend": self.orchestration_backend,
-            "agent_builder_connected": self.agent_builder_connected,
-            "provider": self.provider,
-            "model": self.model,
-            "note_en": "Reasoning runs on real Gemini. Google Agent Builder runtime not connected (awaiting GCP project credentials).",
-            "note_es": "El razonamiento corre en Gemini real. El runtime de Google Agent Builder no está conectado (esperando credenciales del proyecto GCP).",
+            "orchestration_backend": backend,
+            "service": service,
+            "agent_builder_connected": bool(v["connected"] and v["agent_engine_configured"]),
+            "vertex_connected": v["connected"],
+            "provider": "google",
+            "model": PROXY_PRO if not connected else (vertex.VERTEX_PRO),
+            "project": v.get("project"),
+            "location": v.get("location"),
+            "note_en": ("Real Gemini via Google Cloud Vertex AI." if v["connected"]
+                        else "DEV fallback: Gemini via Emergent proxy. Set GOOGLE_APPLICATION_CREDENTIALS_JSON to activate Vertex AI."),
+            "note_es": ("Gemini real vía Google Cloud Vertex AI." if v["connected"]
+                        else "Fallback DEV: Gemini vía proxy Emergent. Define GOOGLE_APPLICATION_CREDENTIALS_JSON para activar Vertex AI."),
         }
 
-    async def run(self, agent: str, session_id: str, system: str, prompt: str, files=None, expect_json=True):
-        """Execute one agent turn. Returns (parsed_output, meta)."""
+    async def run(self, agent, session_id, system, prompt, files=None, expect_json=True, model=None, operation="reason"):
         started = time.time()
-        chat = LlmChat(api_key=EMERGENT_KEY, session_id=session_id, system_message=system).with_model(
-            "gemini", self.model
-        )
-        file_contents = None
-        if files:
-            file_contents = [FileContentWithMimeType(file_path=f["path"], mime_type=f["mime"]) for f in files]
-        message = UserMessage(text=prompt, file_contents=file_contents) if file_contents else UserMessage(text=prompt)
-        raw = await chat.send_message(message)
-        latency_ms = int((time.time() - started) * 1000)
+        want_fast = (model == PROXY_FAST)
+        status = "ok"
+        try:
+            if vertex.is_connected():
+                use_engine = vertex.has_agent_engine() and not files  # engine for text reasoning
+                if use_engine:
+                    raw = await asyncio.to_thread(vertex.agent_engine_query, f"{system}\n\n{prompt}")
+                    raw = raw if isinstance(raw, str) else json.dumps(raw)
+                    used_model, service, backend = f"agent-engine:{vertex.AGENT_ENGINE_ID}", "vertex-agent-engine", "vertex-agent-engine"
+                else:
+                    raw, used_model = await asyncio.to_thread(vertex.generate, system, prompt, files, want_fast)
+                    service, backend = "vertex-ai", "vertex-ai"
+                connected = True
+            else:
+                raw, used_model = await self._emergent(session_id, system, prompt, files, want_fast)
+                service, backend, connected = "emergent-proxy", "emergent-proxy", False
+        except Exception as e:
+            status = "error"
+            raw, used_model, service, backend, connected = (
+                json.dumps({"_error": str(e)[:300], "confidence": 0.0}), "error", "error", "error", False)
 
+        latency_ms = int((time.time() - started) * 1000)
         parsed = raw
         confidence = None
         if expect_json:
@@ -59,17 +82,32 @@ class AgentBuilderAdapter:
                 confidence = parsed.get("confidence")
         meta = {
             "agent": agent,
-            "orchestration_backend": self.orchestration_backend,
-            "agent_builder_connected": self.agent_builder_connected,
-            "provider": self.provider,
-            "model": self.model,
+            "orchestration_backend": backend,
+            "service": service,
+            "operation": operation,
+            "status": status,
+            "agent_builder_connected": backend == "vertex-agent-engine",
+            "vertex_connected": connected,
+            "provider": "google",
+            "model": used_model,
             "latency_ms": latency_ms,
             "confidence": confidence if confidence is not None else 0.72,
         }
         return parsed, meta
 
+    async def _emergent(self, session_id, system, prompt, files, want_fast):
+        from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
+        model = PROXY_FAST if want_fast else PROXY_PRO
+        chat = LlmChat(api_key=EMERGENT_KEY, session_id=session_id, system_message=system).with_model("gemini", model)
+        file_contents = None
+        if files:
+            file_contents = [FileContentWithMimeType(file_path=f["path"], mime_type=f["mime"]) for f in files]
+        message = UserMessage(text=prompt, file_contents=file_contents) if file_contents else UserMessage(text=prompt)
+        raw = await chat.send_message(message)
+        return raw, model
 
-def _extract_json(text: str):
+
+def _extract_json(text):
     if not isinstance(text, str):
         return text
     fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
