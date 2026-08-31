@@ -1,0 +1,47 @@
+{
+  "summary": "Iteration 3 (backend-only). Verified Phase B-2 deploy script fix in /app/backend/deploy_agent_engine.py and re-ran the serving-backend golden path. All checks pass. Deploy script is not executed here (requires GCP creds + deploy libs; runs in user's Cloud Shell), only statically validated.",
+  "static_verification_deploy_script": {
+    "file": "/app/backend/deploy_agent_engine.py",
+    "py_compile": "OK",
+    "ast_first_stmt_of_main": "os.chdir(Path(__file__).parent)  ✅ line 40",
+    "extra_packages_in_agent_engines_create": "extra_packages=[\"adk_app\"]  ✅ line 64 (alongside requirements=reqs and env_vars=engine_env)",
+    "serving_backend_imports_adk_app_at_runtime": false
+  },
+  "backend_regression": {
+    "GET /api/agent/health": {"status": 200, "orchestration_backend": "emergent-proxy", "vertex_connected": false, "agent_builder_connected": false},
+    "GET /api/partner/health": {"status": 200, "connected": false, "product": "Parallel Search API"},
+    "GET /api/auth/me (Bearer e2e_1788105676)": {"status": 200, "user_id": "user_e2e_1788105676", "plan": "creator"},
+    "POST /api/experiences": {"status": 200, "id": "e5c94b0c-488a-4a69-b322-7ec3915fb7e6"},
+    "POST /api/experiences/{id}/plan": {
+      "status": 200,
+      "plan.title": {"en": "Golden Hour's Edge", "es": "Al Borde del Ocaso"},
+      "missions_non_empty": true,
+      "missions_count": 2,
+      "partner_connected": false,
+      "keys": ["plan","missions","context","correlation_id","partner_connected","latency_ms"]
+    },
+    "GET /api/experiences/{id}/agent-runs": {
+      "status": 200,
+      "runs_count": 3,
+      "compliance_trace_fields_present": ["service","operation","status","correlation_id"],
+      "sample_first_run": {"service": "parallel", "operation": "search", "status": "not_connected"}
+    }
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Deploy script fix is correct and minimal: os.chdir before importing adk_app ensures cloudpickle can locate the package; extra_packages=['adk_app'] guarantees dependencies.tar.gz ships the module (fixes 46-byte empty archive → ModuleNotFoundError on Vertex Agent Engine).",
+    "Serving backend correctly does NOT import adk_app or deploy_agent_engine at runtime — edit has zero blast radius on the FastAPI process.",
+    "DEV fallbacks (emergent-proxy for reasoning, Parallel not_connected, Vertex/Agent Builder not_connected) are all surfaced honestly in agent-runs and health endpoints — matches spec."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (6/6 checks)", "frontend": "not tested (skipped per request)"},
+  "test_credentials": "Seeded session token e2e_1788105676 (Bearer). Works.",
+  "seed_data_creation": "Created 1 throwaway experience e5c94b0c-488a-4a69-b322-7ec3915fb7e6 to exercise the /plan pipeline.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Deploy script (/app/backend/deploy_agent_engine.py) is a Cloud-Shell-only artifact and must never be executed in this container. Static AST verification is sufficient. Serving backend golden path (agent/health, partner/health, auth/me, /plan bilingual output with missions, agent-runs with compliance trace) all pass; planning latency observed <30s via Emergent Gemini proxy.",
+  "rca of the issue": "Original bug: cloudpickle serialized root_agent by reference to a local 'adk_app' module that wasn't shipped, so Vertex Agent Engine's staged dependencies.tar.gz was ~46 bytes and the runtime raised ModuleNotFoundError: No module named 'adk_app'. Fix: (1) os.chdir(Path(__file__).parent) as first line of main() so relative imports/resolution anchor to /app/backend, and (2) extra_packages=['adk_app'] in agent_engines.create(...) so the ADK package is uploaded with the deployment. Both changes are present and verified via ast.parse."
+}

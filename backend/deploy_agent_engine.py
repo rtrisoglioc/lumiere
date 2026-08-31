@@ -37,6 +37,7 @@ def _maybe_json_adc():
 
 
 def main():
+    os.chdir(Path(__file__).parent)
     _maybe_json_adc()  # optional; ADC (gcloud auth application-default login) is the default keyless path
     import vertexai
     from vertexai import agent_engines
@@ -60,6 +61,7 @@ def main():
         agent_engine=app,
         display_name="LUMIERE Cinema Orchestrator",
         requirements=reqs,
+        extra_packages=["adk_app"],
         env_vars=engine_env,
     )
     name = remote.api_resource.name
