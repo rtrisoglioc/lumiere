@@ -64,7 +64,7 @@ def main():
         extra_packages=["adk_app"],
         env_vars=engine_env,
     )
-    name = remote.api_resource.name
+    name = getattr(remote, "resource_name", None) or remote.gca_resource.name
     print("\n=== DEPLOYED ===")
     print("REASONING_ENGINE_NAME =", name)
     print("Set this as VERTEX_AGENT_ENGINE_ID for the Cloud Run gateway.")

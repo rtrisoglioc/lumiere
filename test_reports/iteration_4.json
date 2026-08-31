@@ -1,0 +1,54 @@
+{
+  "summary": "Iteration 4 (backend-only). Static-verified the one-line deploy-script edit in /app/backend/deploy_agent_engine.py and re-ran the serving-backend golden path. All checks pass. Deploy script NOT executed (Cloud-Shell-only; no GCP creds here).",
+  "static_verification_deploy_script": {
+    "file": "/app/backend/deploy_agent_engine.py",
+    "py_compile": "OK",
+    "line_67_exact": "name = getattr(remote, \"resource_name\", None) or remote.gca_resource.name  ✅",
+    "api_resource_name_absent": true,
+    "os_chdir_first_stmt_of_main": "os.chdir(Path(__file__).parent)  ✅ line 40",
+    "extra_packages_in_create": "extra_packages=[\"adk_app\"]  ✅ line 64",
+    "serving_backend_imports_deploy_or_adk_app_at_runtime": false
+  },
+  "backend_regression": {
+    "GET /api/agent/health": {"status": 200, "orchestration_backend": "emergent-proxy", "vertex_connected": false, "agent_builder_connected": false, "model": "gemini-3.1-pro-preview"},
+    "GET /api/partner/health": {"status": 200, "connected": false, "product": "Parallel Search API", "status_field": "not_connected"},
+    "GET /api/auth/me (Bearer e2e_1788105676)": {"status": 200, "user_id": "user_e2e_1788105676", "plan": "creator"},
+    "POST /api/experiences": {"status": 200, "id": "c3bdbffe-7afc-4fd9-b9fa-8b54d20a96c7"},
+    "POST /api/experiences/{id}/plan": {
+      "status": 200,
+      "latency_s": 21.9,
+      "plan.title": {"en": "The Golden Hour Shadow", "es": "La Sombra de la Hora Dorada"},
+      "missions_non_empty": true,
+      "missions_count": 2,
+      "partner_connected": false,
+      "keys": ["plan","missions","context","correlation_id","partner_connected","latency_ms"]
+    },
+    "GET /api/experiences/{id}/agent-runs": {
+      "status": 200,
+      "runs_count": 3,
+      "compliance_trace_fields_present": ["service","operation","status","correlation_id"],
+      "runs": [
+        {"service": "parallel", "operation": "search", "status": "not_connected"},
+        {"service": "emergent-proxy", "operation": "story_plan", "status": "ok"},
+        {"service": "emergent-proxy", "operation": "shot_missions", "status": "ok"}
+      ]
+    }
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Deploy-script line-67 fix is correct: getattr(remote, 'resource_name', None) handles the public property (available on modern google-cloud-aiplatform >=1.60 AgentEngine instance) and falls back to remote.gca_resource.name for older/edge builds. Avoids the AttributeError from the removed .api_resource attribute in 1.165.1.",
+    "Prior fixes (os.chdir first in main(); extra_packages=['adk_app'] in agent_engines.create) remain intact — ensures cloudpickle resolves the local adk_app package and Vertex staging tar.gz is non-empty.",
+    "Serving FastAPI backend does not import deploy_agent_engine or adk_app; the edit has zero blast radius on runtime — confirmed via unaffected /api/agent/health and /api/experiences/{id}/plan responses."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (6/6 checks)", "frontend": "not tested (skipped per request)"},
+  "test_credentials": "Bearer e2e_1788105676 — works.",
+  "seed_data_creation": "Created 1 throwaway experience c3bdbffe-7afc-4fd9-b9fa-8b54d20a96c7 to exercise /plan.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "deploy_agent_engine.py is Cloud-Shell-only; never execute here. Static AST/grep + py_compile is sufficient. Plan endpoint expects body {\"intent\": \"<string>\"} (PlanIn.intent: str) — not a dict. Golden path latency for /plan is ~20–25s via Emergent Gemini proxy.",
+  "rca of the issue": "google-cloud-aiplatform 1.165.1 removed the AgentEngine.api_resource attribute; accessing remote.api_resource.name raised AttributeError right after deploy succeeded. Fix uses the stable public property remote.resource_name with a defensive fallback to remote.gca_resource.name. Both are safe because agent_engines.create returns an AgentEngine wrapper exposing resource_name (str) and gca_resource (proto)."
+}
