@@ -60,6 +60,14 @@ function UploadButton({ expId, missionId, label, onStart, testid, variant = "gho
   );
 }
 
+function errMsg(e, fallback) {
+  const d = e?.response?.data?.detail;
+  if (typeof d === "string") return d;
+  if (Array.isArray(d)) return d.map((x) => x?.msg || "").filter(Boolean).join("; ") || fallback;
+  if (d && typeof d === "object") return d.msg || fallback;
+  return fallback;
+}
+
 function VideoMonitor({ storagePath, testid }) {
   return (
     <div className="viewfinder border border-white/15 bg-black p-2" data-testid={testid}>
@@ -136,7 +144,7 @@ export default function Experience() {
       await api.post(`/experiences/${id}/evaluate`);
       await fetchExp(); await fetchRuns();
       toast.success("Coverage evaluated");
-    } catch (e) { toast.error(e?.response?.data?.detail || "Evaluation failed"); }
+    } catch (e) { toast.error(errMsg(e, "Evaluation failed")); }
     finally { setEvaluating(false); }
   };
 
@@ -146,7 +154,7 @@ export default function Experience() {
       await api.post(`/experiences/${id}/cut`, { music_id: selectedMusic });
       await fetchExp(); await fetchRuns();
       toast.success("Rendering cut");
-    } catch (e) { toast.error(e?.response?.data?.detail || "Cut failed"); }
+    } catch (e) { toast.error(errMsg(e, "Cut failed")); }
     finally { setCutting(false); }
   };
 

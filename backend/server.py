@@ -2,6 +2,7 @@ import os
 import uuid
 import asyncio
 import logging
+from typing import Optional
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -49,10 +50,10 @@ class PlanIn(BaseModel):
 
 class ReviseIn(BaseModel):
     instruction: str
-    music_id: str = None
+    music_id: Optional[str] = None
 
 class CutIn(BaseModel):
-    music_id: str = None
+    music_id: Optional[str] = None
 
 class PlanIn2(BaseModel):
     plan: str
