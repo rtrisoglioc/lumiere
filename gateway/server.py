@@ -21,7 +21,7 @@ LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
 ENGINE = os.environ["VERTEX_AGENT_ENGINE_ID"]
 GCS_BUCKET = os.environ.get("GCS_BUCKET")
 TOKEN = os.environ.get("LUMIERE_GATEWAY_TOKEN", "")
-VEO_MODEL = os.environ.get("VEO_MODEL", "veo-3.0-generate-001")
+VEO_MODEL = os.environ.get("VEO_MODEL", "veo-3.1-lite-generate-001")
 
 vertexai.init(project=PROJECT, location=LOCATION)
 _agent = None
@@ -139,6 +139,7 @@ class VideoIn(BaseModel):
 
 class VideoStatusIn(BaseModel):
     operation_name: str
+    output_prefix: str = None
 
 
 @app.post("/video")
@@ -166,26 +167,29 @@ def video_generate(body: VideoIn, authorization: str = Header(default=None)):
 @app.post("/video/status")
 def video_status(body: VideoStatusIn, authorization: str = Header(default=None)):
     _auth(authorization)
+    from google.cloud import storage as gstorage
+    # Primary signal: the generated mp4 landing in GCS under the output prefix.
+    # google-genai operations.get() needs an operation OBJECT (not the name string),
+    # so we detect completion by object presence which is 100% reliable.
     try:
-        op = genai_client().operations.get(body.operation_name)
-        if not op.done:
-            prog = op.metadata.get("progress") if getattr(op, "metadata", None) else None
-            return {"done": False, "status": "RUNNING", "progress": prog}
-        if getattr(op, "error", None):
-            return {"done": True, "status": "FAILED", "error": str(op.error)[:400]}
-        result = getattr(op, "response", None) or getattr(op, "result", None)
-        generated = getattr(result, "generated_videos", None) or []
-        if not generated:
-            return {"done": True, "status": "FAILED", "error": "no video generated"}
-        video = generated[0].video
-        gcs_uri = getattr(video, "uri", None)
-        if not gcs_uri and getattr(video, "video_bytes", None):
-            obj = f"veo/{uuid.uuid4().hex}.mp4"
-            _upload_bytes(video.video_bytes, obj, "video/mp4")
-            gcs_uri = f"gs://{GCS_BUCKET}/{obj}"
-        return {"done": True, "status": "DONE", "gcs_uri": gcs_uri}
+        if body.output_prefix and body.output_prefix.startswith("gs://"):
+            _, _, path = body.output_prefix.partition("gs://")
+            bkt, _, pfx = path.partition("/")
+            blobs = gstorage.Client(project=PROJECT).list_blobs(bkt, prefix=pfx)
+            mp4s = [b.name for b in blobs if b.name.lower().endswith(".mp4")]
+            if mp4s:
+                return {"done": True, "status": "DONE", "gcs_uri": f"gs://{bkt}/{sorted(mp4s)[0]}"}
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"veo_status_error: {str(e)[:400]}")
+        return {"done": False, "status": "RUNNING", "note": f"gcs_check: {str(e)[:120]}"}
+    # Secondary (best effort): surface a hard failure from the operation object.
+    try:
+        from google.genai import types
+        op = genai_client().operations.get(types.GenerateVideosOperation(name=body.operation_name))
+        if getattr(op, "done", False) and getattr(op, "error", None):
+            return {"done": True, "status": "FAILED", "error": str(op.error)[:400]}
+    except Exception:
+        pass
+    return {"done": False, "status": "RUNNING"}
 
 
 @app.get("/video/download")

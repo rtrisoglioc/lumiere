@@ -493,7 +493,7 @@ async def _refresh_job(job: dict) -> dict:
     if job.get("status") not in ("RUNNING", "QUEUED") or not op:
         return job
     try:
-        st = await asyncio.to_thread(vertex_video.poll, op)
+        st = await asyncio.to_thread(vertex_video.poll, op, job.get("output_prefix"))
     except Exception as e:
         await db.video_jobs.update_one({"id": job["id"]}, {"$set": {"last_error": str(e)[:200]}})
         return job
@@ -532,6 +532,7 @@ async def video_generate(body: VideoGenIn, user: dict = Depends(get_current_user
         "prompt": body.prompt,
         "options": body.model_dump(),
         "operation_name": sub.get("operation_name"),
+        "output_prefix": sub.get("output_prefix"),
         "model": sub.get("model"),
         "status": "RUNNING",
         "created_at": now_iso(),

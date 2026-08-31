@@ -9,7 +9,7 @@ import requests
 
 GATEWAY_URL = (os.environ.get("LUMIERE_GATEWAY_URL") or "").strip().rstrip("/")
 GATEWAY_TOKEN = os.environ.get("LUMIERE_GATEWAY_TOKEN", "")
-VEO_MODEL = os.environ.get("VEO_MODEL", "veo-3.0-generate-001")
+VEO_MODEL = os.environ.get("VEO_MODEL", "veo-3.1-lite-generate-001")
 
 
 def _headers():
@@ -46,10 +46,10 @@ class VertexVideoAdapter:
         resp.raise_for_status()
         return {"ok": True, **resp.json()}
 
-    def poll(self, operation_name: str) -> dict:
+    def poll(self, operation_name: str, output_prefix: str = None) -> dict:
         resp = requests.post(
             f"{GATEWAY_URL}/video/status", headers=_headers(), timeout=(30, 120),
-            json={"operation_name": operation_name})
+            json={"operation_name": operation_name, "output_prefix": output_prefix})
         resp.raise_for_status()
         return resp.json()
 
