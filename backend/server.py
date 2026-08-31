@@ -20,6 +20,7 @@ import plans as plan_catalog
 import plans_store
 import music as music_lib
 import agents
+import orchestrator
 from auth import exchange_session, get_current_user, logout as do_logout
 from admin import admin_router
 from social import social_router
@@ -247,7 +248,9 @@ async def create_experience(body: ExperienceIn, user: dict = Depends(get_current
 
 @api.get("/experiences")
 async def list_experiences(user: dict = Depends(get_current_user)):
-    return await db.experiences.find({"owner": user["user_id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return await db.experiences.find(
+        {"owner": user["user_id"], "status": {"$ne": "trashed"}}, {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
 
 @api.get("/experiences/{exp_id}")
 async def get_experience_full(exp_id: str, user: dict = Depends(get_current_user)):
@@ -429,11 +432,213 @@ async def revise_cut(cut_id: str, body: ReviseIn, background: BackgroundTasks, u
     return cut
 
 
+class RemoveClipIn(BaseModel):
+    asset_id: str
+
+
 # ---------- traceability ----------
 @api.get("/experiences/{exp_id}/agent-runs")
 async def agent_runs(exp_id: str, user: dict = Depends(get_current_user)):
     await get_experience(exp_id, user)
     return await db.agent_runs.find({"experience_id": exp_id}, {"_id": 0}).sort("created_at", 1).to_list(500)
+
+
+# ---------- ORCHESTRATOR (primary differentiator) ----------
+@api.get("/experiences/{exp_id}/orchestrator")
+async def get_orchestrator(exp_id: str, user: dict = Depends(get_current_user)):
+    """Recompute the live production state and return the Orchestrator's next
+    best decision (Addendum §2). Recomputed on every call → deletion-aware."""
+    exp = await get_experience(exp_id, user)
+    return await orchestrator.orchestrate(exp)
+
+
+@api.get("/experiences/{exp_id}/decisions")
+async def orchestrator_decisions(exp_id: str, user: dict = Depends(get_current_user)):
+    await get_experience(exp_id, user)
+    return await db.orchestrator_decisions.find({"experience_id": exp_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+
+
+# ---------- media deletion / Trash / recovery (Addendum §3) ----------
+async def _cuts_using(exp_id: str, asset_id: str):
+    cuts = await db.cut_versions.find({"experience_id": exp_id}, {"_id": 0}).to_list(200)
+    return [{"id": c["id"], "version": c.get("version"), "status": c.get("status")}
+            for c in cuts if any(cl.get("asset_id") == asset_id for cl in (c.get("edl") or []))]
+
+
+async def _beats_at_risk(exp: dict, asset_id: str):
+    """Beats this asset covers that NO other active analyzed asset covers."""
+    beats = (exp.get("plan") or {}).get("beats") or []
+    assets = await db.media_assets.find(
+        {"experience_id": exp["id"], "status": "analyzed"}, {"_id": 0}).to_list(300)
+
+    def matched(a):
+        an = a.get("analysis") or {}
+        if not [s for s in (an.get("segments") or []) if s.get("usable", True)]:
+            return set()
+        return set((an.get("narrative_relevance") or {}).get("matched_beats") or [])
+
+    target = next((a for a in assets if a["id"] == asset_id), None)
+    if not target:
+        return []
+    others = set().union(*[matched(a) for a in assets if a["id"] != asset_id]) if len(assets) > 1 else set()
+    risk = matched(target) - others
+    return [{"id": b.get("id"), "name": b.get("name")} for b in beats if b.get("id") in risk]
+
+
+@api.get("/media/{asset_id}/impact")
+async def media_impact(asset_id: str, user: dict = Depends(get_current_user)):
+    a = await db.media_assets.find_one({"id": asset_id, "owner": user["user_id"]}, {"_id": 0})
+    if not a:
+        raise HTTPException(status_code=404, detail="Not found")
+    exp = await db.experiences.find_one({"id": a["experience_id"]}, {"_id": 0})
+    cuts = await _cuts_using(a["experience_id"], asset_id)
+    risk = await _beats_at_risk(exp, asset_id)
+    en = "This clip is unused." if not cuts else f"This clip is used in {len(cuts)} cut(s)."
+    es = "Este clip no se usa." if not cuts else f"Este clip se usa en {len(cuts)} corte(s)."
+    if risk:
+        en += " Deleting it creates a missing shot."
+        es += " Borrarlo crea una toma faltante."
+    return {"asset_id": asset_id, "cuts": cuts, "used_in_cuts": len(cuts),
+            "beats_at_risk": risk, "message": {"en": en, "es": es}}
+
+
+@api.delete("/media/{asset_id}")
+async def delete_media(asset_id: str, permanent: bool = Query(default=False),
+                       confirm: bool = Query(default=False), force: bool = Query(default=False),
+                       user: dict = Depends(get_current_user)):
+    a = await db.media_assets.find_one({"id": asset_id, "owner": user["user_id"]}, {"_id": 0})
+    if not a:
+        raise HTTPException(status_code=404, detail="Not found")
+    exp_id = a["experience_id"]
+    if permanent:
+        if not confirm:
+            raise HTTPException(status_code=400, detail="confirm_required")
+        # Guard: don't silently orphan a cut's EDL. Require force to hard-delete a used clip.
+        if not force and await _cuts_using(exp_id, asset_id):
+            raise HTTPException(status_code=409, detail="in_use_requires_force")
+        try:
+            await asyncio.to_thread(storage.delete_object, a["storage_path"])
+        except Exception:
+            pass
+        await db.media_assets.delete_one({"id": asset_id})
+        dtype = "permanent"
+    else:
+        await db.media_assets.update_one(
+            {"id": asset_id}, {"$set": {"status": "trashed", "prev_status": a.get("status"),
+                                        "trashed_at": now_iso()}})
+        dtype = "trash"
+    impacted = await orchestrator.recompute_cut_impact(exp_id)
+    await db.deletion_events.insert_one({
+        "id": str(uuid.uuid4()), "user_id": user["user_id"], "asset_id": asset_id,
+        "experience_id": exp_id, "type": dtype, "impacted_cuts": impacted, "timestamp": now_iso()})
+    exp = await db.experiences.find_one({"id": exp_id}, {"_id": 0})
+    decision = await orchestrator.orchestrate(exp)
+    return {"ok": True, "type": dtype, "impacted_cuts": impacted, "decision": decision}
+
+
+@api.post("/media/{asset_id}/restore")
+async def restore_media(asset_id: str, user: dict = Depends(get_current_user)):
+    a = await db.media_assets.find_one({"id": asset_id, "owner": user["user_id"]}, {"_id": 0})
+    if not a:
+        raise HTTPException(status_code=404, detail="Not found")
+    if a.get("status") != "trashed":
+        raise HTTPException(status_code=400, detail="not_in_trash")
+    await db.media_assets.update_one(
+        {"id": asset_id}, {"$set": {"status": a.get("prev_status") or "analyzed"},
+                           "$unset": {"trashed_at": ""}})
+    # Un-stick the loop: clears impacted on cuts whose clips are all available again.
+    await orchestrator.recompute_cut_impact(a["experience_id"])
+    exp = await db.experiences.find_one({"id": a["experience_id"]}, {"_id": 0})
+    decision = await orchestrator.orchestrate(exp)
+    return {"ok": True, "decision": decision}
+
+
+@api.delete("/cuts/{cut_id}")
+async def delete_cut(cut_id: str, user: dict = Depends(get_current_user)):
+    """Delete a rendered cut only — source media is preserved (Addendum §3.2)."""
+    c = await db.cut_versions.find_one({"id": cut_id, "owner": user["user_id"]}, {"_id": 0})
+    if not c:
+        raise HTTPException(status_code=404, detail="Not found")
+    if c.get("storage_path"):
+        try:
+            await asyncio.to_thread(storage.delete_object, c["storage_path"])
+        except Exception:
+            pass
+    await db.cut_versions.delete_one({"id": cut_id})
+    await db.deletion_events.insert_one({
+        "id": str(uuid.uuid4()), "user_id": user["user_id"], "cut_id": cut_id,
+        "experience_id": c["experience_id"], "type": "cut", "timestamp": now_iso()})
+    return {"ok": True, "message": {"en": "Cut deleted. Originals preserved.",
+                                    "es": "Corte borrado. Originales preservados."}}
+
+
+@api.get("/experiences/{exp_id}/impact")
+async def experience_impact(exp_id: str, user: dict = Depends(get_current_user)):
+    await get_experience(exp_id, user)
+    videos = await db.media_assets.count_documents({"experience_id": exp_id, "status": {"$ne": "trashed"}})
+    cuts = await db.cut_versions.count_documents({"experience_id": exp_id})
+    return {"videos": videos, "cuts": cuts,
+            "message": {"en": f"This will remove {videos} videos and {cuts} cuts and generated assets.",
+                        "es": f"Esto quitará {videos} videos y {cuts} cortes y activos generados."}}
+
+
+@api.delete("/experiences/{exp_id}")
+async def delete_experience(exp_id: str, permanent: bool = Query(default=False),
+                            confirm: bool = Query(default=False), user: dict = Depends(get_current_user)):
+    exp = await get_experience(exp_id, user)
+    if permanent:
+        if not confirm:
+            raise HTTPException(status_code=400, detail="confirm_required")
+        for a in await db.media_assets.find({"experience_id": exp_id}, {"_id": 0, "storage_path": 1}).to_list(500):
+            try:
+                await asyncio.to_thread(storage.delete_object, a["storage_path"])
+            except Exception:
+                pass
+        await db.media_assets.delete_many({"experience_id": exp_id})
+        await db.cut_versions.delete_many({"experience_id": exp_id})
+        await db.orchestrator_decisions.delete_many({"experience_id": exp_id})
+        await db.experiences.delete_one({"id": exp_id})
+        dtype = "experience_permanent"
+    else:
+        await db.media_assets.update_many({"experience_id": exp_id, "status": {"$ne": "trashed"}},
+                                          {"$set": {"status": "trashed", "trashed_at": now_iso()}})
+        await db.experiences.update_one({"id": exp_id}, {"$set": {"status": "trashed", "trashed_at": now_iso()}})
+        dtype = "experience_trash"
+    await db.deletion_events.insert_one({
+        "id": str(uuid.uuid4()), "user_id": user["user_id"], "experience_id": exp_id,
+        "type": dtype, "timestamp": now_iso()})
+    return {"ok": True, "type": dtype}
+
+
+@api.post("/cuts/{cut_id}/remove-clip")
+async def remove_clip_from_cut(cut_id: str, body: RemoveClipIn, background: BackgroundTasks,
+                               user: dict = Depends(get_current_user)):
+    """Remove a clip from a cut WITHOUT deleting the original → new CutVersion (Addendum §4.1, EDIT-01)."""
+    parent = await db.cut_versions.find_one({"id": cut_id, "owner": user["user_id"]}, {"_id": 0})
+    if not parent:
+        raise HTTPException(status_code=404, detail="Cut not found")
+    new_edl = [c for c in (parent.get("edl") or []) if c.get("asset_id") != body.asset_id]
+    if not new_edl:
+        raise HTTPException(status_code=400, detail="would_be_empty")
+    if len(new_edl) == len(parent.get("edl") or []):
+        raise HTTPException(status_code=400, detail="clip_not_in_cut")
+    for i, c in enumerate(new_edl):
+        c["order"] = i
+    exp_id = parent["experience_id"]
+    version = await _next_version(exp_id)
+    cut = {
+        "id": str(uuid.uuid4()), "experience_id": exp_id, "owner": user["user_id"],
+        "version": version, "parent_id": parent["id"], "kind": "edit",
+        "instruction": f"remove clip {body.asset_id}", "edl": new_edl,
+        "music_id": parent.get("music_id"),
+        "edit_decisions": [{"type": "remove", "description": {"en": "Removed a clip from the cut.",
+                                                              "es": "Se quitó un clip del corte."}}],
+        "status": "rendering", "storage_path": None, "created_at": now_iso(),
+    }
+    await db.cut_versions.insert_one(dict(cut))
+    cut.pop("_id", None)
+    background.add_task(render_cut_task, exp_id, cut["id"])
+    return cut
 
 
 # ---------- account / pricing / usage ----------

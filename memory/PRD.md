@@ -123,3 +123,32 @@ LUMIÈRE turns real lived experiences into cinema through an agentic closed loop
 - Parallel context real sources = blocked until Agent Engine redeploy (PARALLEL_MODE=basic).
 - No real payments (plan changes are placeholders).
 
+
+---
+
+## ADDENDUM v1.0 — Orchestrator, Media Control & Editing (DONE, tested — iteration_8.json 13/13 backend, 7/7 frontend)
+
+**THE product differentiator.** After every material event the Orchestrator emits an explicit, traceable DECISION.
+
+### orchestrator.py (new)
+- `gather_state(exp)`: live production state (media active/analyzed/processing/trashed, beats coverage, usable segments, cuts, impacted cuts).
+- `decide(exp, st, trace_id)`: deterministic next-best-action → contract {next_action, agent_selected, reason(bilingual), required_input, evidence[], confidence, story_completeness, production_state, user_approval_required, trace_id}. Actions: create_plan → capture → wait_analysis → evaluate → get_the_shot → create_cut → recover_impacted → deliver → refine.
+- `orchestrate(exp)`: persists decision to `orchestrator_decisions`, mirrors into `agent_runs` (agent=orchestrator, operation=decide) for the Trace, and stores `live_completeness`/`orchestrator_decision` on the experience. Deletion-aware (recomputed every call).
+- `recompute_cut_impact(exp_id)`: sets/clears `impacted` on every CutVersion from current asset availability (missing/trashed EDL refs). Un-sticks the loop on restore.
+
+### server.py endpoints (new)
+- GET /experiences/{id}/orchestrator (recompute+return); GET /experiences/{id}/decisions.
+- Media deletion (§3): GET /media/{id}/impact (cuts + beats_at_risk + bilingual msg); DELETE /media/{id} (soft Trash default; `?permanent=true&confirm=true` hard; `&force=true` required if used in a cut → no silent broken renders); POST /media/{id}/restore (clears impacted).
+- DELETE /cuts/{id} (render only, originals preserved); GET /experiences/{id}/impact; DELETE /experiences/{id} (soft trash / permanent+confirm).
+- Editing (§4): POST /cuts/{id}/remove-clip {asset_id} → NEW CutVersion (parent_id, kind=edit) without deleting original; re-render. Conversational /cuts/{id}/revise already existed (EDIT-02).
+- list_experiences excludes trashed; usable/analyzed pools exclude trashed (status-based). deletion_events collection logs all deletions (no media bytes retained). AI never auto-permanent-deletes.
+
+### Frontend
+- `components/OrchestratorPanel.jsx`: "LUMIÈRE DIRECTS" banner — reason, required input, completeness bar, evidence chips, primary CTA that routes to the right tab; "Your call" badge when user_approval_required. Integrated at top of Experience `<main>`.
+- `components/MediaActions.jsx`: per-media Trash / Restore / Delete-permanently with impact dialog (bilingual), 2nd confirm for permanent, 409 force-delete handling for in-use clips.
+
+### PENDING from prior turns (unchanged)
+- Veo video generation: needs ONE gateway redeploy (fix for stuck-GENERATING: /video/status now GCS-list based; default model veo-3.1-lite-generate-001). NOT tested here per instruction.
+- Long video (Cinematic Sequence, multi-clip FFmpeg stitch): awaiting user's duration-cap choice.
+- Parallel context real sources: awaiting Agent Engine redeploy (PARALLEL_MODE=basic).
+

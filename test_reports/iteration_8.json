@@ -1,0 +1,29 @@
+{
+  "summary": "Full-stack Addendum v1.0 test: Orchestrator decision contract (ORCH-01/03), Media deletion Trash+Restore+Permanent-Confirm (MEDIA-DEL-01/02/03), Edit versioning remove-clip/revise (EDIT-01/02), deletion-aware completeness (EDIT-03), impacted cuts + recover_impacted, cut delete preserves media, experience impact + soft/hard delete, and decisions persistence. Backend: 13/13 pytest passed against live preview backend with real vision analysis + editor + reviser + ffmpeg render. Frontend smoke: OrchestratorPanel + reason + completeness (60%) + CTA render on /studio/{id}; Capture tab shows analyzed media with media-trash-{id} buttons; clicking opens media-delete-dialog with bilingual impact message and media-confirm-delete visible.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_orchestrator_media_editing.py",
+    "/app/test_reports/pytest/iteration_8.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py delete_experience: soft delete trashes only media (bulk update_many), but does NOT flag any impacted cut_versions. If a user later restores the experience, cuts remain but their impacted flag will be stale. Consider running mark_impacted_cuts per asset (or skipping the impact flag on wholesale trash).",
+    "server.py restore_media: does not clear cut_versions.impacted / impact_reason. If a user trashes an asset (cut marked impacted) then restores it, the cut stays flagged impacted forever and orchestrator will keep returning next_action='recover_impacted' with user_approval_required until user manually re-cuts. Suggest: on restore, clear impacted=false on cuts whose EDL only referenced restored asset(s).",
+    "server.py delete_media permanent branch: if the asset is referenced in one or more cut_versions.edl, permanent delete removes the DB row and blob but the cut EDL still references the now-missing asset_id. render_cut_task's resolver returns None and would fail the render. mark_impacted_cuts flags them, but future renders will fail silently — consider blocking permanent delete when used_in_cuts>0 unless a second 'force' flag is passed.",
+    "orchestrator.decide priority: impacted_cuts branch runs BEFORE media_analyzed/evaluate/create_cut. Correct per spec, but this means as soon as any asset is trashed the orchestrator stays on recover_impacted even if the cut could still be re-rendered from remaining clips. Consider surfacing a 'render_from_remaining' variant.",
+    "server.py experience_impact: 'videos' counts only non-trashed media; if user calls impact AFTER soft-delete they'll see 0/0 which is technically correct but confusing. Consider including trashed count separately.",
+    "orchestrator.py gather_state: coverage denominator uses len(beat_ids); if plan has 0 beats coverage=0.0 forever — non-issue for real plans but worth a guard.",
+    "server.py remove_clip_from_cut background render is triggered but there is no unit-level validation that new_edl duration is non-trivial after removal. If the resulting single clip renders successfully that's fine; still, consider a 'min_total_duration_sec' guard."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_orchestrator_media_editing.py"
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (7/7 smoke checks)"},
+  "test_credentials": "ADMIN Bearer admin_sess_1788155531096 (admin@getlumiere.ai, plan=studio, is_admin=true).",
+  "seed_data_creation": "Created 2 synthetic mp4 clips at /tmp/testclips/clip{1,2}.mp4 (ffmpeg testsrc/smptebars, ~3s each) for real upload+vision+cut. Test experiences prefixed TEST_ and all hard-deleted via permanent=true&confirm=true teardown. UI smoke experience 942d3650... was also permanent-deleted after the run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest suite /app/backend/tests/test_orchestrator_media_editing.py is regression-ready but takes ~3 min because it does real end-to-end: plan (~20s) + upload×2 + vision analysis (~60-90s) + evaluate + ffmpeg render + revise. If /tmp/testclips is wiped, regenerate with ffmpeg lavfi (see command in run history). All 13 tests pass. Video generation (POST /api/video/generate) is intentionally NOT tested (gateway pending). Two behavioral edge cases were noted but did not block acceptance: (a) restore_media doesn't clear cut.impacted; (b) permanent delete of a used asset leaves dangling EDL refs.",
+  "rca of the issue": "N/A — all acceptance IDs (ORCH-01, ORCH-03, MEDIA-DEL-01/02/03, EDIT-01/02/03) verified passing. Frontend integration verified via Playwright smoke."
+}

@@ -14,6 +14,8 @@ import { StatusBadge, ProcessTimeline } from "@/components/StatusBadge";
 import { CircularScore, ScoreBar } from "@/components/CircularScore";
 import { AgentTrace } from "@/components/AgentTrace";
 import { MusicPicker } from "@/components/MusicPicker";
+import { OrchestratorPanel } from "@/components/OrchestratorPanel";
+import { MediaActions } from "@/components/MediaActions";
 
 const TABS = [
   { id: "story", icon: Clapperboard },
@@ -199,6 +201,8 @@ export default function Experience() {
       </div>
 
       <main className="px-4 sm:px-8 py-6 max-w-6xl mx-auto">
+        <OrchestratorPanel expId={id} lang={lang} onGoTab={setTab}
+          refreshKey={`${media.length}-${cuts.length}-${exp.stage}-${media.filter((m) => m.status === "trashed").length}-${exp.completeness ? 1 : 0}`} />
         <AnimatePresence mode="wait">
           <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
 
@@ -334,6 +338,9 @@ export default function Experience() {
                                 </div>
                               )}
                               {a.status === "failed" && <p className="text-xs text-red-400 mt-2">{t("failed")}</p>}
+                              <div className="mt-3 pt-3 border-t border-white/10 flex justify-end">
+                                <MediaActions asset={a} lang={lang} onDone={fetchExp} />
+                              </div>
                             </div>
                           ))}
                         </div>
