@@ -51,12 +51,19 @@ def put_object(path: str, data: bytes, content_type: str) -> dict:
 
 def get_object(path: str):
     key = init_storage()
-    resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=120)
-    if resp.status_code == 404:
-        key = init_storage(force=True)
-        resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=120)
-    resp.raise_for_status()
-    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
+    last = None
+    for _ in range(3):
+        try:
+            resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=120)
+            if resp.status_code == 404:
+                key = init_storage(force=True)
+                resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=120)
+            resp.raise_for_status()
+            return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
+        except (requests.ConnectionError, requests.Timeout) as e:
+            last = e
+            continue
+    raise last
 
 
 def delete_object(path: str) -> bool:

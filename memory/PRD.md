@@ -198,3 +198,36 @@ LUMIÈRE turns real lived experiences into cinema through an agentic closed loop
 - Real social publishing to Instagram/X/LinkedIn = still SIMULATED. Requires each platform's own developer app + OAuth credentials + platform review (Instagram needs Business acct + FB Page + app review; X API paid tier; LinkedIn Marketing API access). Awaiting user's per-network app credentials.
 - PayPal full purchase requires buyer login (can't be automated); capture path is coded + amount-verified but end-to-end purchase pending manual/user test. Currently SANDBOX mode.
 
+---
+
+## FIXES + REAL SCENE TRANSITIONS — 2026-06
+
+### Root-cause fix: transitions / captions / music "not working"
+- BUG: still **images** in a cut's EDL were normalized with duration 0.0 (missing `-loop 1`). The scene-transition `xfade` graph then failed ("matches no streams") and the pro-edit **silently fell back** to a plain whole-clip fade — so users saw no real transitions. Images were also effectively dropped from every cut.
+- FIX `ffmpeg_worker.normalize_segment`: detect stills (`_is_image`) and render them with `-loop 1 -t dur` + silent audio, min 0.5s. `render_cut_with_transitions` now also drops any sub-0.2s segment and recomputes the crossfade duration defensively.
+- Verified on the user's real 4-clip cut (with an image): full combo (transition **fadeblack** + music **coastal-light** + captions **pop** + logo) → `scene_transitions:true`, `captions_status:applied`, audio present (mean −23 dB = music), 12.35s output.
+- Music reliability: `storage.get_object` now retries 3× on connection/timeout errors (intermittent object-storage `ConnectTimeout` was dropping music/originals).
+- Captions feedback: `/cuts/{id}/pro-edit` and `/video/jobs/{id}/edit` now return `captions_status` = off | applied | no_speech; the editors show a warning toast when no clear speech is detected (captions can't be invented from silent footage).
+- Real between-scene transitions confirmed working (xfade video + acrossfade audio) for cuts with ≥2 scenes; single-clip / Veo clips still use whole-clip fade.
+
+### PENDING (next)
+- P1: LinkedIn + Instagram real publishing (awaiting user OAuth app credentials — playbooks already retrieved).
+
+---
+
+## B-ROLL INSERTS + FIXES VERIFIED — 2026-06 (tested: iteration_14.json, frontend 100%)
+
+### NEW: Stock/AI B-roll inserts (Cut Pro Editor)
+- `inserts.py`: `build_insert_clip` turns a still into a motion clip (kenburns / zoomout / slide / fade / pulse via zoompan + fade), `splice_inserts` splits the base by timestamp and crossfades the insert in/out.
+- `inserts_router.py` (`/api/inserts`): `POST /ai` (Gemini via Universal Key), `GET /stock/search` + `POST /stock/save` (Pexels — needs `PEXELS_API_KEY`, currently NOT set → stock disabled, AI works), `GET /` library, `GET /{id}/image` (token via header or `?auth=`), `DELETE /{id}`, `GET /config`. Insert images stored in object storage; collection `insert_assets`.
+- `server.py`: `ProEditIn.inserts` [{id, at_sec, duration, effect}] spliced into the base before captions/transform in `pro_edit_cut`. Verified via curl: AI insert generated + spliced (cut 12.35s → 15.1s).
+- Frontend `CutEditor.jsx`: B-roll section — AI prompt gen, stock search (gated), your-library grid, and per-insert rows with effect pills + 'At sec' & 'Duration' sliders (max from the preview video duration).
+
+### Root-cause fixes verified this iteration
+- Still-image cut segments now loop to full duration → real between-scene xfade transitions no longer silently fall back. `xfade_concat` shared by cut transitions + inserts.
+- `captions_status` (off/applied/no_speech) returned + warning toast when footage has no speech.
+- `storage.get_object` retries 3× on connection/timeout (fixed intermittent music drop-outs).
+
+### TO ENABLE STOCK (optional)
+- Add `PEXELS_API_KEY` to backend/.env (free at pexels.com/api) → the Cut editor stock search activates automatically.
+

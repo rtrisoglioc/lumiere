@@ -34,6 +34,30 @@ NETWORKS = ["instagram", "facebook", "x", "linkedin", "tiktok"]
 class PlanIn(BaseModel):
     brief: str
     count: int = 4
+    tone: str = None
+
+
+class BrandIn(BaseModel):
+    name: str = None
+    colors: list = None
+    auto_logo: bool = None
+
+
+async def _get_brand(user_id: str) -> dict:
+    u = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    return ((u or {}).get("preferences") or {}).get("brand") or {}
+
+
+def _brand_directives(brand: dict) -> str:
+    bits = []
+    if brand.get("name"):
+        bits.append(f"Brand name: {brand['name']}.")
+    cols = [c for c in (brand.get("colors") or []) if c]
+    if cols:
+        bits.append(f"Use this exact brand color palette: {', '.join(cols)}.")
+    bits.append("Premium, high-end editorial magazine aesthetic, cinematic lighting, strong focal subject, "
+                "clean negative space for text, sharp, professional studio quality, tasteful depth of field.")
+    return " ".join(bits)
 
 
 class PostUpdateIn(BaseModel):
@@ -65,20 +89,44 @@ def _extract_json(text):
         return None
 
 
+@social_router.get("/brand")
+async def get_brand(user: dict = Depends(require_social)):
+    brand = await _get_brand(user["user_id"])
+    u = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    return {"brand": brand, "has_logo": ((u or {}).get("preferences") or {}).get("has_logo", False)}
+
+
+@social_router.put("/brand")
+async def put_brand(body: BrandIn, user: dict = Depends(require_social)):
+    upd = {f"preferences.brand.{k}": v for k, v in body.model_dump().items() if v is not None}
+    if upd:
+        await db.users.update_one({"user_id": user["user_id"]}, {"$set": upd})
+    return await get_brand(user)
+
+
 @social_router.post("/plan")
 async def make_plan(body: PlanIn, user: dict = Depends(require_social)):
     from emergentintegrations.llm.chat import LlmChat, UserMessage
     n = max(1, min(8, body.count))
-    system = ("You are SOCIAL DIRECTOR, an agentic social media strategist for LUMIÈRE (a cinematic "
-              "content studio). Return ONLY valid minified JSON. All human-facing text fields MUST be "
-              'bilingual objects {"en":"...","es":"..."} with natural English AND Spanish.')
+    brand = await _get_brand(user["user_id"])
+    brand_line = _brand_directives(brand)
+    tone = (body.tone or "warm, cinematic, confident").strip()
+    system = ("You are SOCIAL DIRECTOR, an elite agentic social media strategist and copywriter for LUMIÈRE "
+              "(a cinematic content studio). Return ONLY valid minified JSON. All human-facing text fields MUST be "
+              'bilingual objects {"en":"...","es":"..."} with natural, native-level English AND Spanish. '
+              "Captions must be EXTENSIVE and engaging: a scroll-stopping hook line, then 2-4 short paragraphs of "
+              "story/value separated by \\n\\n line breaks, then a clear call-to-action, and 1-3 tasteful emojis "
+              "used sparingly. Aim for 90-160 words per caption.")
     prompt = (
-        f"Creator ideas/brief: {body.brief!r}.\n"
+        f"Creator ideas/brief: {body.brief!r}. Desired tone: {tone}.\n"
+        f"Brand context for the visuals: {brand_line}\n"
         f"Produce a JSON object: {{\"plan\": {{\"summary\": bilingual, \"strategy\": bilingual}}, "
         f"\"posts\": array of exactly {n} objects {{\"title\": bilingual short, \"caption\": bilingual "
-        "(1-3 sentences, engaging), \"hashtags\": array of 4-6 strings (no # inside), "
-        f"\"network\": one of {NETWORKS}, \"design_prompt\": a concise English image-generation prompt "
-        "for an on-brand cinematic social graphic, \"best_time\": bilingual suggested day/time}}}}."
+        "EXTENSIVE (90-160 words, hook + \\n\\n paragraphs + CTA, sparing emojis), "
+        "\"hashtags\": array of 6-10 relevant strings (no # inside), "
+        f"\"network\": one of {NETWORKS}, \"design_prompt\": a rich, detailed English image-generation prompt "
+        "(subject, composition, lighting, mood, and the brand palette/aesthetic above) for a premium on-brand "
+        "cinematic social graphic, \"best_time\": bilingual suggested day/time}}}}."
     )
     chat = LlmChat(api_key=EMERGENT_KEY, session_id=f"social:{user['user_id']}:{uuid.uuid4().hex[:8]}",
                    system_message=system).with_model("gemini", TEXT_MODEL)
@@ -123,20 +171,43 @@ async def _get_post(post_id: str, user: dict) -> dict:
 @social_router.post("/posts/{post_id}/design")
 async def generate_design(post_id: str, user: dict = Depends(require_social)):
     from emergentintegrations.llm.chat import LlmChat, UserMessage
+    import asyncio
     post = await _get_post(post_id, user)
-    prompt = (post.get("design_prompt") or "Cinematic on-brand social graphic, warm golden light, "
-              "editorial, premium film aesthetic")
-    chat = LlmChat(api_key=EMERGENT_KEY, session_id=f"social-img:{post_id}",
-                   system_message="You generate premium cinematic social media graphics.")
+    brand = await _get_brand(user["user_id"])
+    base_prompt = (post.get("design_prompt") or "Cinematic on-brand social graphic, warm golden light, "
+                   "editorial, premium film aesthetic")
+    prompt = f"{base_prompt}. {_brand_directives(brand)}"
+    chat = LlmChat(api_key=EMERGENT_KEY, session_id=f"social-img:{post_id}:{uuid.uuid4().hex[:6]}",
+                   system_message="You generate premium, professional, high-end cinematic social media graphics with clean composition.")
     chat.with_model("gemini", IMAGE_MODEL).with_params(modalities=["image", "text"])
     _text, images = await chat.send_message_multimodal_response(
-        UserMessage(text=f"Create a striking social media graphic (square). {prompt}"))
+        UserMessage(text=f"Create a striking, professional social media graphic (square, 1:1). {prompt}"))
     if not images:
         raise HTTPException(status_code=502, detail="No image generated")
     img_bytes = base64.b64decode(images[0]["data"])
     path = f"{storage.APP_NAME}/social/{user['user_id']}/{post_id}.png"
-    put = await __import__("asyncio").to_thread(storage.put_object, path, img_bytes, "image/png")
-    await db.social_posts.update_one({"id": post_id}, {"$set": {"image_path": put["path"]}, "$unset": {"overlay_path": ""}})
+    put = await asyncio.to_thread(storage.put_object, path, img_bytes, "image/png")
+    set_fields = {"image_path": put["path"]}
+    unset_fields = {"overlay_path": ""}
+
+    # Auto-brand: bake the user's logo onto a copy if the brand kit enables it.
+    if brand.get("auto_logo"):
+        u = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
+        lp = ((u or {}).get("preferences") or {}).get("logo_path")
+        if lp:
+            logo_bytes = (await asyncio.to_thread(storage.get_object, lp))[0]
+            logo_opts = {"enabled": True, "x": 0.95, "y": 0.95, "scale": 0.16, "opacity": 0.95}
+            out = await asyncio.to_thread(image_overlay.apply_overlay, img_bytes, logo_bytes, logo_opts, None)
+            opath = f"{storage.APP_NAME}/social/{user['user_id']}/{post_id}_overlay.png"
+            oput = await asyncio.to_thread(storage.put_object, opath, out, "image/png")
+            set_fields["overlay_path"] = oput["path"]
+            set_fields["overlay_opts"] = {"logo": logo_opts, "text": {}}
+            unset_fields = {}
+
+    op = {"$set": set_fields}
+    if unset_fields:
+        op["$unset"] = unset_fields
+    await db.social_posts.update_one({"id": post_id}, op)
     return {"ok": True, "image_url": f"/api/social/posts/{post_id}/image"}
 
 

@@ -15,6 +15,7 @@ from starlette.responses import StreamingResponse
 from db import db, now_iso, WORKDIR
 import storage
 import ffmpeg_worker as ff
+import inserts
 from agent_adapter import agent_builder
 from partner_adapter import partner
 from vertex_video_adapter import vertex_video
@@ -29,6 +30,7 @@ from auth import exchange_session, get_current_user, logout as do_logout
 from admin import admin_router
 from social import social_router
 from payments import payments_router
+from inserts_router import inserts_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("lumiere")
@@ -449,6 +451,7 @@ class ProEditIn(BaseModel):
     music_id: Optional[str] = None
     logo: Optional[dict] = None
     captions: Optional[dict] = None
+    inserts: Optional[list] = None
 
 
 @api.post("/cuts/{cut_id}/pro-edit")
@@ -460,7 +463,39 @@ async def pro_edit_cut(cut_id: str, body: ProEditIn, user: dict = Depends(get_cu
         raise HTTPException(status_code=404, detail="Cut not found")
     if parent.get("status") != "ready" or not parent.get("storage_path"):
         raise HTTPException(status_code=400, detail="cut_not_ready")
-    src_bytes = (await asyncio.to_thread(storage.get_object, parent["storage_path"]))[0]
+    exp_id = parent["experience_id"]
+    edl = parent.get("edl") or []
+    scene_transition = body.transition in ff.XFADE_MAP and len(edl) >= 2
+    effective_transition = body.transition
+    base_tmp = None
+    if scene_transition:
+        # Re-render from the ORIGINAL segments with real between-scene transitions.
+        resolved = {}
+        for aid in {c["asset_id"] for c in edl}:
+            a = await db.media_assets.find_one({"id": aid}, {"_id": 0})
+            if not a:
+                continue
+            try:
+                local = await asyncio.to_thread(storage.ensure_local, exp_id, "originals", a["local_name"], a["storage_path"])
+            except Exception:
+                continue
+            resolved[aid] = (str(local), (a.get("probe") or {}).get("has_audio", False))
+
+        if len(resolved) >= 2 or (resolved and len(edl) >= 2):
+            base_tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
+            trdir = WORKDIR / exp_id / "tmp" / f"protrans_{uuid.uuid4().hex[:8]}"
+            res = await asyncio.to_thread(ff.render_cut_with_transitions, edl,
+                                          lambda aid: resolved.get(aid), trdir, Path(base_tmp), body.transition)
+            if res.get("ok"):
+                src_bytes = Path(base_tmp).read_bytes()
+                effective_transition = "none"  # transitions already baked between scenes
+            else:
+                logger.warning(f"scene transitions failed: {res.get('error')}")
+                src_bytes = (await asyncio.to_thread(storage.get_object, parent["storage_path"]))[0]
+        else:
+            src_bytes = (await asyncio.to_thread(storage.get_object, parent["storage_path"]))[0]
+    else:
+        src_bytes = (await asyncio.to_thread(storage.get_object, parent["storage_path"]))[0]
 
     music_tmp = logo_tmp = None
     if body.music_id:
@@ -482,24 +517,55 @@ async def pro_edit_cut(cut_id: str, body: ProEditIn, user: dict = Depends(get_cu
     src_tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
     out_tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
     Path(src_tmp).write_bytes(src_bytes)
+    edit_src = src_tmp
+    insert_tmp = None
+
+    # B-roll inserts (stock/AI) spliced into the base by timestamp.
+    insert_specs = []
+    for it in (body.inserts or []):
+        a = await db.insert_assets.find_one({"id": it.get("id"), "owner": user["user_id"]}, {"_id": 0})
+        if not a:
+            continue
+        ib = (await asyncio.to_thread(storage.get_object, a["storage_path"]))[0]
+        ip = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
+        Path(ip).write_bytes(ib)
+        insert_specs.append({"image_path": ip, "at_sec": it.get("at_sec", 0),
+                             "duration": it.get("duration", 2.0), "effect": it.get("effect", "kenburns")})
+    if insert_specs:
+        insert_tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
+        idir = WORKDIR / exp_id / "tmp" / f"inserts_{uuid.uuid4().hex[:8]}"
+        join = effective_transition if effective_transition in ff.XFADE_MAP else "fade"
+        res_i = await asyncio.to_thread(inserts.splice_inserts, src_tmp, insert_specs, Path(insert_tmp), idir, join)
+        for s in insert_specs:
+            try:
+                Path(s["image_path"]).unlink(missing_ok=True)
+            except Exception:
+                pass
+        if res_i.get("ok"):
+            edit_src = insert_tmp
+        else:
+            logger.warning(f"inserts failed: {res_i.get('error')}")
+
     caps = body.captions or {}
     sub_tmp = None
+    captions_status = "off"
     if caps.get("enabled"):
         W, H = video_editor.ASPECT_DIMS.get(body.aspect, video_editor.ASPECT_DIMS["16:9"])
         try:
-            sub_tmp = await captions.generate_ass(src_tmp, W, H, float(body.speed or 1),
+            sub_tmp = await captions.generate_ass(edit_src, W, H, float(body.speed or 1),
                                                   caps.get("style", "bold"), caps.get("lang") or None)
         except Exception as e:
             logger.warning(f"captions failed (cut): {e}")
+        captions_status = "applied" if sub_tmp else "no_speech"
     opts = {"aspect": body.aspect, "filter": body.filter, "speed": body.speed,
-            "transition": body.transition, "logo": logo}
+            "transition": effective_transition, "logo": logo}
     try:
-        await asyncio.to_thread(video_editor.transform_video, src_tmp, out_tmp, opts, logo_tmp, music_tmp, sub_tmp)
+        await asyncio.to_thread(video_editor.transform_video, edit_src, out_tmp, opts, logo_tmp, music_tmp, sub_tmp)
         out_bytes = Path(out_tmp).read_bytes()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"pro_edit_failed: {str(e)[:200]}")
     finally:
-        for p in (src_tmp, out_tmp, logo_tmp, music_tmp, sub_tmp):
+        for p in (src_tmp, out_tmp, logo_tmp, music_tmp, sub_tmp, base_tmp, insert_tmp):
             try:
                 if p:
                     Path(p).unlink(missing_ok=True)
@@ -527,6 +593,8 @@ async def pro_edit_cut(cut_id: str, body: ProEditIn, user: dict = Depends(get_cu
     }
     await db.cut_versions.insert_one(dict(cut))
     cut.pop("_id", None)
+    cut["captions_status"] = captions_status
+    cut["scene_transitions"] = bool(scene_transition and effective_transition == "none")
     return cut
 
 
@@ -957,6 +1025,7 @@ async def edit_video(job_id: str, body: VideoEditIn, user: dict = Depends(get_cu
     Path(src_tmp).write_bytes(src_bytes)
     caps = body.captions or {}
     sub_tmp = None
+    captions_status = "off"
     if caps.get("enabled"):
         W, H = video_editor.ASPECT_DIMS.get(body.aspect, video_editor.ASPECT_DIMS["16:9"])
         try:
@@ -964,6 +1033,7 @@ async def edit_video(job_id: str, body: VideoEditIn, user: dict = Depends(get_cu
                                                   caps.get("style", "bold"), caps.get("lang") or None)
         except Exception as e:
             logger.warning(f"captions failed (video): {e}")
+        captions_status = "applied" if sub_tmp else "no_speech"
     try:
         await asyncio.to_thread(video_editor.transform_video, src_tmp, out_tmp, opts, logo_tmp, None, sub_tmp)
         out_bytes = Path(out_tmp).read_bytes()
@@ -990,6 +1060,7 @@ async def edit_video(job_id: str, body: VideoEditIn, user: dict = Depends(get_cu
     }
     await db.video_jobs.insert_one(dict(new_job))
     new_job.pop("_id", None)
+    new_job["captions_status"] = captions_status
     return new_job
 
 
@@ -1077,6 +1148,7 @@ app.include_router(api)
 app.include_router(admin_router)
 app.include_router(social_router)
 app.include_router(payments_router)
+app.include_router(inserts_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

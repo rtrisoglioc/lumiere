@@ -67,6 +67,8 @@ export function VideoEditor({ job, lang, onDone, onClose }) {
     try { before = (await api.get("/video/jobs")).data.map((j) => j.id); } catch { /* */ }
     try {
       const r = await api.post(`/video/jobs/${job.id}/edit`, { aspect, filter, speed, transition, logo, captions }, { timeout: 300000 });
+      if (r.data?.captions_status === "no_speech")
+        toast.warning(lang === "es" ? "No se detectó voz clara para subtítulos." : "No clear speech detected for captions.");
       toast.success(lang === "es" ? "Edición lista" : "Edit ready");
       onDone?.(r.data); onClose?.();
     } catch (e) {

@@ -1,0 +1,28 @@
+{
+  "summary": "Frontend E2E for LUMIÈRE new B-roll inserts UI in Cut Pro Editor, cut transitions, Social Studio Brand Kit + design overlay, and Pricing PayPal render. All 4 primary flows PASS. VideoEditor regression skipped per spec (no DONE video job available for the editor user).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Cut Pro Editor - Music select", "issues": ["React hydration warning: <span> cannot be a child of <option> — bl(t.title, lang) returns a span inside a native <select><option>. Cosmetic (only DevTools warning) but should render plain text inside <option>. File: /app/frontend/src/components/CutEditor.jsx line ~126."]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_14.json"],
+  "action_items": [
+    "Optional cleanup: In CutEditor.jsx <option> for music tracks, render bilingual title as a string (e.g. lang==='es'? t.title.es : t.title.en) instead of a React element to remove the hydration warning."
+  ],
+  "critical_code_review_comments": [
+    "CutEditor.jsx <option> child is a React element (bl() likely returns a <span>), producing a React hydration warning in DevTools. Not user-visible but should be a plain string.",
+    "CutEditor.jsx apply() uses timeout 300000ms but there's no visible progress feedback beyond the button spinner + label; consider a lightweight progress hint since renders can take 30-60s.",
+    "SocialImageEditor.jsx: overlay POST does not send updated_at/cache-busting header; UI relies on ?ts= in preview src. OK for now, but for defense, backend could set Cache-Control: no-store on the image endpoint."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skip)", "frontend": "100% for all requested flows"},
+  "test_credentials": "Editor: cookie session_token + localStorage lumiere_token = 'e2e_editor_sess_fixed' (Experience 58a17b06-8019-4532-88d1-6dd4d585c59e). Admin: 'admin_sess_1788202740303'.",
+  "seed_data_creation": "Created 1 new AI insert via /inserts/ai ('sunrise over Patagonia mountains') and 1 new cut version V6 (dissolve + Ken Burns insert) under user_ded9f8fff749. Overlay applied to first admin social post (text: 'LUMIÈRE TESTING'). Brand saved for admin: name=LumièreTest, colors=[#ff6600,#0066ff,#00cc88], auto_logo=true.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Cut Pro Editor opens from Experience -> EDIT tab -> 'Pro Edit' button (data-testid pro-edit-cut-<version>). Full apply cycle takes ~45s (insert + transition, no captions). With captions add ~60-90s. Stock (Pexels) is disabled and correctly shows the 'API key missing' note instead of the stock search box. Pricing yearly toggle: click the 'Yearly' button by role (not the cycle-toggle wrapper). Admin is on studio plan so Studio card shows 'Current plan' — Creator card correctly shows real PayPal iframes (2 iframes) for both monthly and yearly. VideoEditor (editor-captions-toggle) not tested because editor user has no DONE video job.",
+  "rca of the issue": "No blocking issues found. The only observation is a cosmetic React hydration warning from a <span> inside <option> in the music selector."
+}

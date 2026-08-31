@@ -43,11 +43,20 @@ export default function SocialStudio() {
   const [posts, setPosts] = useState([]);
   const [working, setWorking] = useState({});
   const [editing, setEditing] = useState(null);
+  const [brand, setBrand] = useState({ name: "", colors: ["#D6A85F", "#111111", "#F5F1E8"], auto_logo: false });
+  const [savingBrand, setSavingBrand] = useState(false);
 
   const loadAccount = async () => { try { const r = await api.get("/account"); setAccount(r.data); } catch { /* */ } };
   const loadPosts = async () => { try { const r = await api.get("/social/posts"); setPosts(r.data); } catch { /* */ } };
+  const loadBrand = async () => { try { const r = await api.get("/social/brand"); if (r.data.brand) setBrand((b) => ({ ...b, ...r.data.brand, colors: r.data.brand.colors?.length ? r.data.brand.colors : b.colors })); } catch { /* */ } };
   useEffect(() => { loadAccount(); }, []);
-  useEffect(() => { if (account?.entitlements?.social) loadPosts(); }, [account]);
+  useEffect(() => { if (account?.entitlements?.social) { loadPosts(); loadBrand(); } }, [account]);
+
+  const saveBrand = async () => {
+    setSavingBrand(true);
+    try { await api.put("/social/brand", brand); toast.success(lang === "es" ? "Marca guardada" : "Brand saved"); }
+    catch { toast.error("Failed"); } finally { setSavingBrand(false); }
+  };
 
   const entitled = account?.entitlements?.social;
 
@@ -119,7 +128,42 @@ export default function SocialStudio() {
           </motion.div>
         ) : (
           <>
-            <div className="mt-8 rounded-2xl border border-lumiere-ink/10 bg-lumiere-warm p-6">
+            <div className="mt-8 rounded-2xl border border-lumiere-gold/40 bg-lumiere-gold/5 p-6" data-testid="brand-kit">
+              <div className="flex items-center gap-2 mb-3">
+                <Palette size={16} className="text-lumiere-gold" />
+                <span className="font-mono text-xs uppercase tracking-widest text-lumiere-ink/60">{lang === "es" ? "Kit de Marca" : "Brand Kit"}</span>
+              </div>
+              <div className="grid md:grid-cols-3 gap-4 items-end">
+                <div>
+                  <label className="font-mono text-[0.55rem] uppercase tracking-widest text-lumiere-ink/40 block mb-1">{lang === "es" ? "Nombre de marca" : "Brand name"}</label>
+                  <input value={brand.name || ""} data-testid="brand-name" onChange={(e) => setBrand({ ...brand, name: e.target.value })}
+                    placeholder="LUMIÈRE" className="w-full bg-white border border-lumiere-ink/15 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-lumiere-gold" />
+                </div>
+                <div>
+                  <label className="font-mono text-[0.55rem] uppercase tracking-widest text-lumiere-ink/40 block mb-1">{lang === "es" ? "Colores" : "Colors"}</label>
+                  <div className="flex items-center gap-2">
+                    {brand.colors.map((c, i) => (
+                      <input key={i} type="color" value={c} data-testid={`brand-color-${i}`}
+                        onChange={(e) => { const cs = [...brand.colors]; cs[i] = e.target.value; setBrand({ ...brand, colors: cs }); }}
+                        className="h-9 w-9 rounded-md border border-lumiere-ink/15 cursor-pointer bg-white p-0.5" />
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={!!brand.auto_logo} data-testid="brand-auto-logo" onChange={(e) => setBrand({ ...brand, auto_logo: e.target.checked })} />
+                    <span className="text-xs text-lumiere-ink/70">{lang === "es" ? "Logo automático" : "Auto logo"}</span>
+                  </label>
+                  <button onClick={saveBrand} disabled={savingBrand} data-testid="brand-save"
+                    className="inline-flex items-center gap-2 bg-lumiere-gold hover:bg-lumiere-goldHover text-lumiere-ink px-4 py-2 rounded-full font-mono text-[0.6rem] uppercase tracking-widest transition-colors disabled:opacity-50">
+                    {savingBrand ? <Loader2 size={13} className="animate-spin" /> : null} {lang === "es" ? "Guardar" : "Save"}
+                  </button>
+                </div>
+              </div>
+              <p className="text-[0.6rem] text-lumiere-ink/40 mt-3">{lang === "es" ? "La marca alimenta las imágenes IA (paleta + estilo pro) y, si activas Logo automático, se coloca tu logo." : "Brand feeds AI images (palette + pro style) and, with Auto logo, stamps your logo."}</p>
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-lumiere-ink/10 bg-lumiere-warm p-6">
               <label className="font-mono text-xs uppercase tracking-widest text-lumiere-ink/50 block mb-2">{g(T.brief, lang)}</label>
               <textarea data-testid="social-brief-input" value={brief} onChange={(e) => setBrief(e.target.value)} rows={3}
                 placeholder={g(T.ph, lang)}
@@ -177,7 +221,7 @@ export default function SocialStudio() {
                       <div className="p-5 flex flex-col flex-1">
                         <h3 className="font-display text-xl">{g(p.title, lang)}</h3>
                         <textarea value={g(p.caption, lang)} onChange={(e) => updatePost(p.id, { caption: { ...(p.caption || {}), [lang]: e.target.value } })}
-                          rows={3} data-testid={`social-caption-${p.id}`}
+                          rows={7} data-testid={`social-caption-${p.id}`}
                           className="mt-2 w-full bg-white border border-lumiere-ink/10 rounded-lg p-2.5 text-base leading-relaxed resize-none focus:outline-none focus:ring-1 focus:ring-lumiere-iris" />
                         <div className="flex flex-wrap gap-1.5 mt-2">
                           {(p.hashtags || []).map((h, i) => <span key={i} className="font-mono text-xs text-lumiere-iris">#{h}</span>)}
