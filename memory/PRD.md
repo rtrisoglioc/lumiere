@@ -72,3 +72,10 @@ LUMIÈRE turns real lived experiences into cinema through an agentic closed loop
 - `backend/gcs_media.py`: GCS upload → gs:// URI bridge for Vision path (lazy import, graceful not_configured).
 - Env vars added (empty placeholders): GCS_BUCKET, GCS_STAGING_BUCKET, PARALLEL_MODE.
 - Nothing deployed. Golden path verified intact (existing exp: 2 media, 3 cuts). adk_app not imported by runtime; google-adk NOT installed in serving env (deploy-time only).
+
+## Phase B-2 code (2026-06) — Option A gateway (NOT deployed)
+- `gateway/` (Cloud Run service, keyless ADC): `server.py` (FastAPI: /healthz, /agent→agent_engines.get(ENGINE).query, /vision→GCS upload+query with gs:// URI, bearer LUMIERE_GATEWAY_TOKEN), `Dockerfile`, `requirements.txt`, `.dockerignore`.
+- `backend/agent_adapter.py`: gateway-first routing — if LUMIERE_GATEWAY_URL set → call Cloud Run gateway over HTTPS (service=vertex-agent-engine); else vertex direct; else emergent-proxy (DEV). `_gateway()` handles /agent and /vision(multipart).
+- `backend/deploy_agent_engine.py`: keyless ADC primary (optional JSON), passes env_vars (PARALLEL_API_KEY, GCS_BUCKET, project/location) into agent_engines.create.
+- Env placeholders added: LUMIERE_GATEWAY_URL, LUMIERE_GATEWAY_TOKEN (token generated in git-ignored backend/.env).
+- No JSON key, no policy change. Golden path (DEV) re-verified working after edits.

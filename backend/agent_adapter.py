@@ -23,6 +23,13 @@ EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
 PROXY_FAST = "gemini-3.5-flash"
 PROXY_PRO = "gemini-3.1-pro-preview"
 
+GATEWAY_URL = (os.environ.get("LUMIERE_GATEWAY_URL") or "").strip().rstrip("/")
+GATEWAY_TOKEN = os.environ.get("LUMIERE_GATEWAY_TOKEN", "")
+
+
+def gateway_enabled() -> bool:
+    return bool(GATEWAY_URL)
+
 
 class AgentBuilderAdapter:
     provider = "google"
@@ -55,7 +62,11 @@ class AgentBuilderAdapter:
         want_fast = (model == PROXY_FAST)
         status = "ok"
         try:
-            if vertex.is_connected():
+            if gateway_enabled():
+                raw, used_model = await asyncio.to_thread(
+                    self._gateway, operation, system, prompt, files, session_id)
+                service, backend, connected = "vertex-agent-engine", "vertex-agent-engine", True
+            elif vertex.is_connected():
                 use_engine = vertex.has_agent_engine() and not files  # engine for text reasoning
                 if use_engine:
                     raw = await asyncio.to_thread(vertex.agent_engine_query, f"{system}\n\n{prompt}")
@@ -105,6 +116,29 @@ class AgentBuilderAdapter:
         message = UserMessage(text=prompt, file_contents=file_contents) if file_contents else UserMessage(text=prompt)
         raw = await chat.send_message(message)
         return raw, model
+
+    def _gateway(self, operation, system, prompt, files, session_id):
+        import requests
+        headers = {"Authorization": f"Bearer {GATEWAY_TOKEN}"}
+        if files:
+            f = files[0]
+            with open(f["path"], "rb") as fh:
+                resp = requests.post(
+                    f"{GATEWAY_URL}/vision", headers=headers, timeout=180,
+                    data={"operation": operation, "session_id": session_id or "",
+                          "payload": json.dumps({"system": system, "prompt": prompt})},
+                    files={"file": (os.path.basename(f["path"]), fh, f["mime"])},
+                )
+        else:
+            resp = requests.post(
+                f"{GATEWAY_URL}/agent", headers={**headers, "Content-Type": "application/json"},
+                timeout=120, json={"operation": operation, "session_id": session_id or "",
+                                   "payload": {"system": system, "prompt": prompt}})
+        resp.raise_for_status()
+        data = resp.json()
+        result = data.get("result")
+        raw = result if isinstance(result, str) else json.dumps(result)
+        return raw, data.get("model", "agent-engine")
 
 
 def _extract_json(text):
