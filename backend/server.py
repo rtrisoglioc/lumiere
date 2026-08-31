@@ -24,9 +24,11 @@ import music as music_lib
 import agents
 import orchestrator
 import video_editor
+import captions
 from auth import exchange_session, get_current_user, logout as do_logout
 from admin import admin_router
 from social import social_router
+from payments import payments_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("lumiere")
@@ -439,6 +441,96 @@ class RemoveClipIn(BaseModel):
     asset_id: str
 
 
+class ProEditIn(BaseModel):
+    aspect: str = "16:9"
+    filter: str = "none"
+    speed: float = 1.0
+    transition: str = "none"
+    music_id: Optional[str] = None
+    logo: Optional[dict] = None
+    captions: Optional[dict] = None
+
+
+@api.post("/cuts/{cut_id}/pro-edit")
+async def pro_edit_cut(cut_id: str, body: ProEditIn, user: dict = Depends(get_current_user)):
+    """Pro editor for an Experience CUT: format 16:9/9:16/1:1, color look, speed,
+    transition stock and music — applied via FFmpeg into a new CutVersion."""
+    parent = await db.cut_versions.find_one({"id": cut_id, "owner": user["user_id"]}, {"_id": 0})
+    if not parent:
+        raise HTTPException(status_code=404, detail="Cut not found")
+    if parent.get("status") != "ready" or not parent.get("storage_path"):
+        raise HTTPException(status_code=400, detail="cut_not_ready")
+    src_bytes = (await asyncio.to_thread(storage.get_object, parent["storage_path"]))[0]
+
+    music_tmp = logo_tmp = None
+    if body.music_id:
+        track = await music_lib.get_track(body.music_id)
+        if track and track.get("storage_path"):
+            mb = (await asyncio.to_thread(storage.get_object, track["storage_path"]))[0]
+            music_tmp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False).name
+            Path(music_tmp).write_bytes(mb)
+    logo = body.logo or {}
+    if logo.get("enabled"):
+        u = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
+        lp = (u.get("preferences") or {}).get("logo_path")
+        if lp:
+            lb = (await asyncio.to_thread(storage.get_object, lp))[0]
+            logo_tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
+            Path(logo_tmp).write_bytes(lb)
+        await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"preferences.logo": logo}})
+
+    src_tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
+    out_tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
+    Path(src_tmp).write_bytes(src_bytes)
+    caps = body.captions or {}
+    sub_tmp = None
+    if caps.get("enabled"):
+        W, H = video_editor.ASPECT_DIMS.get(body.aspect, video_editor.ASPECT_DIMS["16:9"])
+        try:
+            sub_tmp = await captions.generate_ass(src_tmp, W, H, float(body.speed or 1),
+                                                  caps.get("style", "bold"), caps.get("lang") or None)
+        except Exception as e:
+            logger.warning(f"captions failed (cut): {e}")
+    opts = {"aspect": body.aspect, "filter": body.filter, "speed": body.speed,
+            "transition": body.transition, "logo": logo}
+    try:
+        await asyncio.to_thread(video_editor.transform_video, src_tmp, out_tmp, opts, logo_tmp, music_tmp, sub_tmp)
+        out_bytes = Path(out_tmp).read_bytes()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"pro_edit_failed: {str(e)[:200]}")
+    finally:
+        for p in (src_tmp, out_tmp, logo_tmp, music_tmp, sub_tmp):
+            try:
+                if p:
+                    Path(p).unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    exp_id = parent["experience_id"]
+    new_id = str(uuid.uuid4())
+    path = f"{storage.APP_NAME}/cuts/{exp_id}/{new_id}.mp4"
+    put = await asyncio.to_thread(storage.put_object, path, out_bytes, "video/mp4")
+    version = await _next_version(exp_id)
+    cut = {
+        "id": new_id, "experience_id": exp_id, "owner": user["user_id"], "version": version,
+        "parent_id": parent["id"], "kind": "pro-edit", "edl": parent.get("edl"),
+        "music_id": body.music_id,
+        "instruction": f"pro-edit · {body.aspect} · {body.filter} · {body.transition}",
+        "edit_decisions": [{"type": "pro-edit", "description": {
+            "en": f"Format {body.aspect}, {body.filter} look, {body.transition} transition"
+                  + (", music" if body.music_id else "") + (", logo" if logo.get("enabled") else "")
+                  + (", captions" if caps.get("enabled") else ""),
+            "es": f"Formato {body.aspect}, look {body.filter}, transición {body.transition}"
+                  + (", música" if body.music_id else "") + (", logo" if logo.get("enabled") else "")
+                  + (", subtítulos" if caps.get("enabled") else "")}}],
+        "status": "ready", "storage_path": put["path"], "created_at": now_iso(),
+    }
+    await db.cut_versions.insert_one(dict(cut))
+    cut.pop("_id", None)
+    return cut
+
+
+
 # ---------- traceability ----------
 @api.get("/experiences/{exp_id}/agent-runs")
 async def agent_runs(exp_id: str, user: dict = Depends(get_current_user)):
@@ -784,6 +876,8 @@ class VideoEditIn(BaseModel):
     filter: str = "none"
     speed: float = 1.0
     logo: Optional[LogoOpts] = None
+    transition: str = "none"
+    captions: Optional[dict] = None
 
 
 class PrefsIn(BaseModel):
@@ -861,13 +955,22 @@ async def edit_video(job_id: str, body: VideoEditIn, user: dict = Depends(get_cu
     src_tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
     out_tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
     Path(src_tmp).write_bytes(src_bytes)
+    caps = body.captions or {}
+    sub_tmp = None
+    if caps.get("enabled"):
+        W, H = video_editor.ASPECT_DIMS.get(body.aspect, video_editor.ASPECT_DIMS["16:9"])
+        try:
+            sub_tmp = await captions.generate_ass(src_tmp, W, H, float(body.speed or 1),
+                                                  caps.get("style", "bold"), caps.get("lang") or None)
+        except Exception as e:
+            logger.warning(f"captions failed (video): {e}")
     try:
-        await asyncio.to_thread(video_editor.transform_video, src_tmp, out_tmp, opts, logo_tmp)
+        await asyncio.to_thread(video_editor.transform_video, src_tmp, out_tmp, opts, logo_tmp, None, sub_tmp)
         out_bytes = Path(out_tmp).read_bytes()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"edit_failed: {str(e)[:200]}")
     finally:
-        for p in (src_tmp, out_tmp, logo_tmp):
+        for p in (src_tmp, out_tmp, logo_tmp, sub_tmp):
             try:
                 if p:
                     Path(p).unlink(missing_ok=True)
@@ -973,6 +1076,7 @@ async def startup():
 app.include_router(api)
 app.include_router(admin_router)
 app.include_router(social_router)
+app.include_router(payments_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

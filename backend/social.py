@@ -20,6 +20,7 @@ from db import db, now_iso
 from auth import get_current_user
 import plans_store
 import storage
+import image_overlay
 
 load_dotenv()
 social_router = APIRouter(prefix="/api/social")
@@ -135,17 +136,54 @@ async def generate_design(post_id: str, user: dict = Depends(require_social)):
     img_bytes = base64.b64decode(images[0]["data"])
     path = f"{storage.APP_NAME}/social/{user['user_id']}/{post_id}.png"
     put = await __import__("asyncio").to_thread(storage.put_object, path, img_bytes, "image/png")
-    await db.social_posts.update_one({"id": post_id}, {"$set": {"image_path": put["path"]}})
+    await db.social_posts.update_one({"id": post_id}, {"$set": {"image_path": put["path"]}, "$unset": {"overlay_path": ""}})
     return {"ok": True, "image_url": f"/api/social/posts/{post_id}/image"}
 
 
 @social_router.get("/posts/{post_id}/image")
 async def get_design(post_id: str, user: dict = Depends(require_social)):
     post = await _get_post(post_id, user)
-    if not post.get("image_path"):
+    path = post.get("overlay_path") or post.get("image_path")
+    if not path:
         raise HTTPException(status_code=404, detail="No image")
-    data, ct = await __import__("asyncio").to_thread(storage.get_object, post["image_path"])
+    data, ct = await __import__("asyncio").to_thread(storage.get_object, path)
     return Response(content=data, media_type="image/png")
+
+
+class OverlayIn(BaseModel):
+    logo: dict = None
+    text: dict = None
+
+
+@social_router.post("/posts/{post_id}/overlay")
+async def overlay_design(post_id: str, body: OverlayIn, user: dict = Depends(require_social)):
+    """Composite the user logo and/or a text headline onto the post image
+    (non-destructive: always rebuilt from the original AI image)."""
+    import asyncio
+    post = await _get_post(post_id, user)
+    if not post.get("image_path"):
+        raise HTTPException(status_code=400, detail="no_base_image")
+    logo = body.logo or {}
+    text = body.text or {}
+    if not (logo.get("enabled") or (text.get("enabled") and (text.get("content") or "").strip())):
+        # clear overlay -> revert to original
+        await db.social_posts.update_one({"id": post_id}, {"$unset": {"overlay_path": ""}})
+        return {"ok": True, "cleared": True, "image_url": f"/api/social/posts/{post_id}/image"}
+
+    base_bytes = (await asyncio.to_thread(storage.get_object, post["image_path"]))[0]
+    logo_bytes = None
+    if logo.get("enabled"):
+        u = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
+        lp = (u.get("preferences") or {}).get("logo_path")
+        if lp:
+            logo_bytes = (await asyncio.to_thread(storage.get_object, lp))[0]
+        else:
+            logo["enabled"] = False
+    out = await asyncio.to_thread(image_overlay.apply_overlay, base_bytes, logo_bytes, logo, text)
+    path = f"{storage.APP_NAME}/social/{user['user_id']}/{post_id}_overlay.png"
+    put = await asyncio.to_thread(storage.put_object, path, out, "image/png")
+    await db.social_posts.update_one({"id": post_id}, {"$set": {"overlay_path": put["path"], "overlay_opts": {"logo": logo, "text": text}}})
+    return {"ok": True, "image_url": f"/api/social/posts/{post_id}/image"}
 
 
 @social_router.put("/posts/{post_id}")

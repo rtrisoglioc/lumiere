@@ -16,6 +16,7 @@ import { AgentTrace } from "@/components/AgentTrace";
 import { MusicPicker } from "@/components/MusicPicker";
 import { OrchestratorPanel } from "@/components/OrchestratorPanel";
 import { MediaActions } from "@/components/MediaActions";
+import { CutEditor } from "@/components/CutEditor";
 
 const TABS = [
   { id: "story", icon: Clapperboard },
@@ -190,6 +191,7 @@ export default function Experience() {
     const m = (exp.media || []).find((x) => x.id === assetId);
     return m?.original_filename || assetId?.slice(0, 8);
   };
+  const [cutEditing, setCutEditing] = useState(null);
 
   if (!exp) {
     return (
@@ -557,6 +559,12 @@ export default function Experience() {
                               <button data-testid={`play-cut-${c.version}`} onClick={() => { setTab("edit"); }}
                                 className="inline-flex items-center gap-1.5 font-mono text-xs text-lumiere-orange hover:underline"><Play size={12} /> {t("finalFilm")}</button>
                             )}
+                            {c.status === "ready" && (
+                              <button data-testid={`pro-edit-cut-${c.version}`} onClick={() => setCutEditing(c)}
+                                className="inline-flex items-center gap-1.5 bg-lumiere-iris hover:bg-lumiere-irisHover text-white px-3 py-1.5 font-mono text-[0.6rem] uppercase tracking-widest transition-colors">
+                                <Wand2 size={12} /> {lang === "es" ? "Editar Pro" : "Pro Edit"}
+                              </button>
+                            )}
                             <button data-testid={`delete-cut-${c.version}`} onClick={() => deleteCut(c.id)}
                               className="inline-flex items-center gap-1.5 font-mono text-[0.6rem] uppercase tracking-widest text-zinc-500 hover:text-red-400 transition-colors">
                               <Trash2 size={11} /> {lang === "es" ? "Borrar corte" : "Delete cut"}
@@ -589,6 +597,11 @@ export default function Experience() {
           </button>
         ))}
       </nav>
+      {cutEditing && (
+        <CutEditor cut={cutEditing} lang={lang}
+          onClose={() => setCutEditing(null)}
+          onDone={() => { fetchExp(); fetchRuns(); }} />
+      )}
     </div>
   );
 }

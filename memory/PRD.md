@@ -173,3 +173,28 @@ LUMIÈRE turns real lived experiences into cinema through an agentic closed loop
 - P2: Editor Phase (b): visual timeline, trim handles, text/titles, music track.
 - Code hygiene: server.py ~983 lines — split into routers (video/editor/files/social/admin) when convenient.
 
+
+---
+
+## PRO EDITOR v2 + SOCIAL OVERLAYS + PAYPAL — 2026-06 (tested: iteration_13.json, backend 9/9, frontend 100%)
+
+### CapCut-style AI auto-captions (both editors)
+- `captions.py` (new): extracts audio via FFmpeg → OpenAI Whisper `whisper-1` (Emergent Universal Key, verbose_json segment timestamps) → builds a styled **ASS** subtitle file (styles: bold / pop / boxed / minimal; auto/es/en). Timings scaled by playback speed. Graceful [] when no speech. Validated end-to-end (TTS→Whisper→ASS→FFmpeg burn).
+- `video_editor.py`: `transform_video()` now accepts `subtitle_path` and burns captions with the `ass` filter; added looks **film / noir / vintage / teal_orange** and transitions **fadeblack / fadewhite**.
+- `server.py`: `ProEditIn` and `VideoEditIn` gained optional `captions` {enabled,style,lang}; both `/cuts/{id}/pro-edit` and `/video/jobs/{id}/edit` run the caption pipeline before the FFmpeg pass.
+- Frontend `CutEditor.jsx` + `VideoEditor.jsx`: captions toggle + style pills + language pills + preview badge; new filter/transition pills.
+
+### Social Studio image overlays (logo + text headline)
+- `image_overlay.py` (new): PIL composite of the user logo (position/size/opacity) and a text headline (position/color/size, stroked). Non-destructive — always rebuilt from the original AI image.
+- `social.py`: `POST /posts/{id}/overlay` (stores `overlay_path`; clears to revert); `get_design` serves overlay if present; `generate_design` clears stale overlay.
+- Frontend `SocialImageEditor.jsx` (new) opened via a "Design/Diseño" button on each post with an image.
+
+### Real PayPal payments (Sandbox) on Pricing
+- `payments.py` (new): PayPal REST v2 — `GET /payments/config`, `POST /paypal/create-order`, `POST /paypal/capture`, `GET /history`. Amount computed server-side from the plan catalog; **capture verifies the actual captured amount == expected plan amount** (anti-tamper) and only then upgrades the user's plan + records a payment. Blocking HTTP wrapped in `asyncio.to_thread`.
+- Env (backend/.env): `PAYPAL_CLIENT_ID`, `PAYPAL_SECRET`, `PAYPAL_MODE=sandbox`. Validated: create-order returns real sandbox order ids ($49 creator/monthly, $1428 studio/yearly).
+- Frontend `Pricing.jsx`: `@paypal/react-paypal-js` PayPalButtons for paid plans (client_id fetched from `/payments/config`); Free = direct switch; falls back to direct switch if PayPal not configured.
+
+### STILL PENDING / NOT DONE
+- Real social publishing to Instagram/X/LinkedIn = still SIMULATED. Requires each platform's own developer app + OAuth credentials + platform review (Instagram needs Business acct + FB Page + app review; X API paid tier; LinkedIn Marketing API access). Awaiting user's per-network app credentials.
+- PayPal full purchase requires buyer login (can't be automated); capture path is coded + amount-verified but end-to-end purchase pending manual/user test. Currently SANDBOX mode.
+

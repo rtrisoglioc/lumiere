@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Sparkles, Lock, Loader2, Image as ImageIcon, CalendarClock, Send, Trash2, Wand2 } from "lucide-react";
+import { Sparkles, Lock, Loader2, Image as ImageIcon, CalendarClock, Send, Trash2, Wand2, Palette } from "lucide-react";
 import { toast } from "sonner";
 import { api, API, getToken } from "@/lib/api";
 import { useI18n } from "@/i18n";
 import { Header } from "@/components/Header";
+import { SocialImageEditor } from "@/components/SocialImageEditor";
 
 const g = (o, lang) => (o ? (typeof o === "string" ? o : o[lang]) : "");
 const NETWORKS = ["instagram", "facebook", "x", "linkedin", "tiktok"];
@@ -41,6 +42,7 @@ export default function SocialStudio() {
   const [plan, setPlan] = useState(null);
   const [posts, setPosts] = useState([]);
   const [working, setWorking] = useState({});
+  const [editing, setEditing] = useState(null);
 
   const loadAccount = async () => { try { const r = await api.get("/account"); setAccount(r.data); } catch { /* */ } };
   const loadPosts = async () => { try { const r = await api.get("/social/posts"); setPosts(r.data); } catch { /* */ } };
@@ -157,7 +159,13 @@ export default function SocialStudio() {
                     <div key={p.id} data-testid={`social-post-${p.id}`} className="rounded-2xl border border-lumiere-ink/10 bg-lumiere-warm overflow-hidden flex flex-col">
                       <div className="aspect-video bg-lumiere-ink/5 flex items-center justify-center relative overflow-hidden">
                         {p.image_path ? (
-                          <img src={imgUrl(p.id)} alt="" className="w-full h-full object-cover" data-testid={`social-image-${p.id}`} />
+                          <>
+                            <img src={imgUrl(p.id)} alt="" className="w-full h-full object-cover" data-testid={`social-image-${p.id}`} />
+                            <button data-testid={`social-brand-${p.id}`} onClick={() => setEditing(p)}
+                              className="absolute bottom-2 left-2 inline-flex items-center gap-1.5 bg-lumiere-warm/90 border border-lumiere-ink/15 text-lumiere-ink px-3 py-1.5 rounded-full font-mono text-[0.55rem] uppercase tracking-widest hover:border-lumiere-iris transition-colors">
+                              <Palette size={12} /> {lang === "es" ? "Diseño" : "Design"}
+                            </button>
+                          </>
                         ) : (
                           <button data-testid={`social-design-${p.id}`} onClick={() => genDesign(p.id)} disabled={working[p.id] === "design"}
                             className="inline-flex items-center gap-2 bg-lumiere-iris/10 border border-lumiere-iris/40 text-lumiere-iris px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest hover:bg-lumiere-iris/20 transition-colors">
@@ -210,6 +218,7 @@ export default function SocialStudio() {
           </>
         )}
       </main>
+      {editing && <SocialImageEditor post={editing} lang={lang} onDone={loadPosts} onClose={() => setEditing(null)} />}
     </div>
   );
 }

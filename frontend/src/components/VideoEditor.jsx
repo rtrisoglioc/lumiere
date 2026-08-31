@@ -1,15 +1,20 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Loader2, Upload, Download, Wand2 } from "lucide-react";
+import { X, Loader2, Upload, Download, Wand2, Captions } from "lucide-react";
 import { toast } from "sonner";
 import { api, API, getToken } from "@/lib/api";
 
 const g = (o, lang) => (o ? o[lang] : "");
 const ASPECTS = [["16:9", "aspect-video"], ["9:16", "aspect-[9/16]"], ["1:1", "aspect-square"]];
-const FILTERS = ["none", "cinematic", "warm", "cool", "bw", "vivid"];
+const FILTERS = ["none", "cinematic", "warm", "cool", "bw", "vivid", "film", "noir", "vintage", "teal_orange"];
 const SPEEDS = [[0.5, "0.5×"], [1, "1×"], [2, "2×"]];
+const TRANSITIONS = ["none", "fade", "dissolve", "smooth", "fadeblack", "fadewhite"];
+const CAP_STYLES = ["bold", "pop", "boxed", "minimal"];
+const CAP_LANGS = [["", "Auto"], ["es", "ES"], ["en", "EN"]];
 const CSS_FILTER = {
   none: "none", cinematic: "contrast(1.1) saturate(1.2)", warm: "sepia(0.15) saturate(1.1)",
   cool: "hue-rotate(-12deg) saturate(1.05)", bw: "grayscale(1) contrast(1.08)", vivid: "saturate(1.4) contrast(1.08)",
+  film: "contrast(1.12) saturate(1.05) sepia(0.06)", noir: "grayscale(1) contrast(1.28) brightness(0.98)",
+  vintage: "sepia(0.35) saturate(0.9) contrast(1.03)", teal_orange: "contrast(1.08) saturate(1.15) hue-rotate(-6deg)",
 };
 const T = {
   title: { en: "Pro Editor", es: "Editor Pro" }, aspect: { en: "Format", es: "Formato" },
@@ -25,6 +30,8 @@ export function VideoEditor({ job, lang, onDone, onClose }) {
   const [aspect, setAspect] = useState(job.options?.aspect_ratio || "16:9");
   const [filter, setFilter] = useState("cinematic");
   const [speed, setSpeed] = useState(1);
+  const [transition, setTransition] = useState("none");
+  const [captions, setCaptions] = useState({ enabled: false, style: "pop", lang: "" });
   const [logo, setLogo] = useState({ enabled: false, x: 0.95, y: 0.95, scale: 0.18, opacity: 0.85 });
   const [hasLogo, setHasLogo] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -59,7 +66,7 @@ export function VideoEditor({ job, lang, onDone, onClose }) {
     let before = [];
     try { before = (await api.get("/video/jobs")).data.map((j) => j.id); } catch { /* */ }
     try {
-      const r = await api.post(`/video/jobs/${job.id}/edit`, { aspect, filter, speed, logo }, { timeout: 180000 });
+      const r = await api.post(`/video/jobs/${job.id}/edit`, { aspect, filter, speed, transition, logo, captions }, { timeout: 300000 });
       toast.success(lang === "es" ? "Edición lista" : "Edit ready");
       onDone?.(r.data); onClose?.();
     } catch (e) {
@@ -93,6 +100,14 @@ export function VideoEditor({ job, lang, onDone, onClose }) {
                            left: `calc((100% - ${logo.scale * 100}%) * ${logo.x})`,
                            top: `calc((100% - ${logo.scale * 100}%) * ${logo.y})`, pointerEvents: "none" }} />
               )}
+              {captions.enabled && (
+                <div className="absolute inset-x-0 bottom-[9%] flex justify-center pointer-events-none" data-testid="editor-captions-preview">
+                  <span className={`px-2 py-0.5 font-bold text-white text-center leading-tight ${captions.style === "boxed" ? "bg-black/70" : ""} ${captions.style === "pop" ? "text-lumiere-gold uppercase" : ""}`}
+                    style={{ textShadow: captions.style === "boxed" ? "none" : "0 1px 3px #000, 0 0 3px #000", fontSize: "clamp(11px,3vw,20px)" }}>
+                    {lang === "es" ? "Subtítulos automáticos IA" : "AI auto-captions"}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
           {/* controls */}
@@ -112,6 +127,28 @@ export function VideoEditor({ job, lang, onDone, onClose }) {
                 <Pill key={s} active={speed === s} onClick={() => setSpeed(s)} testid={`editor-speed-${s}`}>{lbl}</Pill>
               ))}
             </Ctrl>
+            <Ctrl label={lang === "es" ? "Transición" : "Transition"}>
+              {TRANSITIONS.map((tr) => (
+                <Pill key={tr} active={transition === tr} onClick={() => setTransition(tr)} testid={`editor-transition-${tr}`}>{tr}</Pill>
+              ))}
+            </Ctrl>
+
+            <div className="border-t border-white/10 pt-4">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[0.6rem] uppercase tracking-widest text-zinc-500 flex items-center gap-1"><Captions size={11} /> {lang === "es" ? "Subtítulos (IA)" : "Captions (AI)"}</span>
+                <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={captions.enabled} data-testid="editor-captions-toggle" onChange={(e) => setCaptions({ ...captions, enabled: e.target.checked })} /><span className="text-xs text-zinc-300">{lang === "es" ? "Activar" : "Enable"}</span></label>
+              </div>
+              {captions.enabled && (
+                <div className="mt-2 space-y-2">
+                  <div className="flex flex-wrap gap-1.5">{CAP_STYLES.map((s) => <Pill key={s} active={captions.style === s} onClick={() => setCaptions({ ...captions, style: s })} testid={`editor-cap-style-${s}`}>{s}</Pill>)}</div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-[0.55rem] uppercase tracking-widest text-zinc-500">{lang === "es" ? "Idioma" : "Language"}</span>
+                    {CAP_LANGS.map(([v, l]) => <Pill key={v} active={captions.lang === v} onClick={() => setCaptions({ ...captions, lang: v })} testid={`editor-cap-lang-${v || "auto"}`}>{l}</Pill>)}
+                  </div>
+                  <p className="text-[0.6rem] text-zinc-500 leading-snug">{lang === "es" ? "Transcribe el audio con IA y quema subtítulos animados." : "AI-transcribes the audio and burns in animated subtitles."}</p>
+                </div>
+              )}
+            </div>
 
             <div className="border-t border-white/10 pt-4">
               <div className="flex items-center justify-between">
