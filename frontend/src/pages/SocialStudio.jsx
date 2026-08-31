@@ -10,6 +10,13 @@ import { SocialImageEditor } from "@/components/SocialImageEditor";
 
 const g = (o, lang) => (o ? (typeof o === "string" ? o : o[lang]) : "");
 const NETWORKS = ["instagram", "facebook", "x", "linkedin", "tiktok"];
+const STYLE_LABELS = {
+  infographic: { es: "Infografía educativa", en: "Educational infographic" },
+  illustration3d: { es: "Ilustración 3D", en: "3D illustration" },
+  flatvector: { es: "Vector plano", en: "Flat vector" },
+  minimal: { es: "Minimal corporativo", en: "Minimal corporate" },
+  photo: { es: "Foto cinematográfica", en: "Cinematic photo" },
+};
 const STATUS_COLOR = { draft: "text-lumiere-ink/50 border-lumiere-ink/20", scheduled: "text-lumiere-gold border-lumiere-gold/50", published: "text-lumiere-sage border-lumiere-sage/50" };
 
 const T = {
@@ -43,12 +50,13 @@ export default function SocialStudio() {
   const [posts, setPosts] = useState([]);
   const [working, setWorking] = useState({});
   const [editing, setEditing] = useState(null);
-  const [brand, setBrand] = useState({ name: "", colors: ["#D6A85F", "#111111", "#F5F1E8"], auto_logo: false });
+  const [brand, setBrand] = useState({ name: "", colors: ["#D6A85F", "#111111", "#F5F1E8"], auto_logo: false, image_style: "infographic", website: "" });
+  const [brandStyles, setBrandStyles] = useState(["infographic", "illustration3d", "flatvector", "minimal", "photo"]);
   const [savingBrand, setSavingBrand] = useState(false);
 
   const loadAccount = async () => { try { const r = await api.get("/account"); setAccount(r.data); } catch { /* */ } };
   const loadPosts = async () => { try { const r = await api.get("/social/posts"); setPosts(r.data); } catch { /* */ } };
-  const loadBrand = async () => { try { const r = await api.get("/social/brand"); if (r.data.brand) setBrand((b) => ({ ...b, ...r.data.brand, colors: r.data.brand.colors?.length ? r.data.brand.colors : b.colors })); } catch { /* */ } };
+  const loadBrand = async () => { try { const r = await api.get("/social/brand"); if (r.data.styles) setBrandStyles(r.data.styles); if (r.data.brand) setBrand((b) => ({ ...b, ...r.data.brand, colors: r.data.brand.colors?.length ? r.data.brand.colors : b.colors })); } catch { /* */ } };
   useEffect(() => { loadAccount(); }, []);
   useEffect(() => { if (account?.entitlements?.social) { loadPosts(); loadBrand(); } }, [account]);
 
@@ -160,7 +168,21 @@ export default function SocialStudio() {
                   </button>
                 </div>
               </div>
-              <p className="text-[0.6rem] text-lumiere-ink/40 mt-3">{lang === "es" ? "La marca alimenta las imágenes IA (paleta + estilo pro) y, si activas Logo automático, se coloca tu logo." : "Brand feeds AI images (palette + pro style) and, with Auto logo, stamps your logo."}</p>
+              <div className="grid md:grid-cols-2 gap-4 mt-4">
+                <div>
+                  <label className="font-mono text-[0.55rem] uppercase tracking-widest text-lumiere-ink/40 block mb-1">{lang === "es" ? "Estilo visual (IA)" : "Visual style (AI)"}</label>
+                  <select value={brand.image_style || "infographic"} data-testid="brand-style" onChange={(e) => setBrand({ ...brand, image_style: e.target.value })}
+                    className="w-full bg-white border border-lumiere-ink/15 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-lumiere-gold">
+                    {brandStyles.map((s) => <option key={s} value={s}>{STYLE_LABELS[s]?.[lang] || s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="font-mono text-[0.55rem] uppercase tracking-widest text-lumiere-ink/40 block mb-1">{lang === "es" ? "Web (pie de imagen)" : "Website (image footer)"}</label>
+                  <input value={brand.website || ""} data-testid="brand-website" onChange={(e) => setBrand({ ...brand, website: e.target.value })}
+                    placeholder="www.tuempresa.com" className="w-full bg-white border border-lumiere-ink/15 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-lumiere-gold" />
+                </div>
+              </div>
+              <p className="text-[0.6rem] text-lumiere-ink/40 mt-3">{lang === "es" ? "El estilo define el tipo de imagen IA (infografías/ilustración, no fotos). Con Logo automático se coloca tu logo en la esquina y tu web abajo." : "Style sets the AI image type (infographics/illustration, not photos). Auto logo stamps your logo in the corner and your website at the bottom."}</p>
             </div>
 
             <div className="mt-6 rounded-2xl border border-lumiere-ink/10 bg-lumiere-warm p-6">

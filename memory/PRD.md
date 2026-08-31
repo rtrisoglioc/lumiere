@@ -231,3 +231,13 @@ LUMIÈRE turns real lived experiences into cinema through an agentic closed loop
 ### TO ENABLE STOCK (optional)
 - Add `PEXELS_API_KEY` to backend/.env (free at pexels.com/api) → the Cut editor stock search activates automatically.
 
+---
+
+## SOCIAL IMAGE STYLE (illustration/infographic, not photos) — 2026-06
+
+- User wants Social images as ILLUSTRATED/INFOGRAPHIC educational graphics (3D/vector characters, title, checklist, brand colors, website footer) — NOT photos of real people — plus the company logo in a corner.
+- `social.py`: added `STYLE_PRESETS` (infographic / illustration3d / flatvector / minimal / photo). `generate_design` now leads with the style directive ("STRICTLY NO photorealistic photographs of real people") and frames the AI's design_prompt as the TOPIC; `make_plan` forces design_prompts to follow the chosen style. Brand Kit gains `image_style` + `website`.
+- Auto-brand: `generate_design` stamps the logo in a corner (x=0.96,y=0.05) and the website URL at the footer when set. Overlay is now non-fatal (try/except) and PIL uses `LOAD_TRUNCATED_IMAGES=True` (Gemini PNGs were sometimes truncated → fixed OSError broken data stream).
+- Verified: generated a real infographic (3D character + title + checklist + purple brand bg + "www.redagilelatam.com" footer + corner logo) — matches the user's references. `/social/brand` returns `styles` list.
+- Frontend `SocialStudio.jsx`: Brand Kit now has a Visual Style dropdown (data-testid brand-style) + Website field (brand-website).
+

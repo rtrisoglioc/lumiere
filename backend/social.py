@@ -11,6 +11,7 @@ import re
 import json
 import uuid
 import base64
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
@@ -21,6 +22,8 @@ from auth import get_current_user
 import plans_store
 import storage
 import image_overlay
+
+logger = logging.getLogger("lumiere")
 
 load_dotenv()
 social_router = APIRouter(prefix="/api/social")
@@ -41,11 +44,26 @@ class BrandIn(BaseModel):
     name: str = None
     colors: list = None
     auto_logo: bool = None
+    image_style: str = None
+    website: str = None
 
 
-async def _get_brand(user_id: str) -> dict:
-    u = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    return ((u or {}).get("preferences") or {}).get("brand") or {}
+STYLE_PRESETS = {
+    "infographic": ("Modern flat EDUCATIONAL INFOGRAPHIC social graphic. Soft pastel brand-colored background "
+                    "with subtle abstract wave/blob shapes, a friendly stylized 3D-rendered (clay/Blender look) "
+                    "character or clean vector illustration as the focal element, a bold title area, and a tidy "
+                    "vertical checklist / bullet list with check icons. Generous negative space, balanced layout, "
+                    "premium corporate look, crisp and uncluttered. STRICTLY NO photorealistic photographs of real people."),
+    "illustration3d": ("Playful 3D-rendered illustration (clay/Blender style) of stylized rounded characters and "
+                       "objects on a clean brand-colored background, soft studio lighting, modern corporate marketing "
+                       "aesthetic, plenty of clean space. NO photorealistic humans, NO real photos."),
+    "flatvector": ("Minimal FLAT VECTOR illustration with geometric shapes, limited brand palette, clean lines and "
+                   "simple line-icons, corporate presentation aesthetic, lots of whitespace. NO photos, NO realistic people."),
+    "minimal": ("Ultra-minimal corporate graphic: solid brand-color background, one simple abstract shape or line-icon, "
+                "large clean area reserved for a title. NO photos of people."),
+    "photo": ("Premium cinematic photograph, editorial magazine quality, tasteful depth of field, professional lighting."),
+}
+STYLE_LABELS = list(STYLE_PRESETS.keys())
 
 
 def _brand_directives(brand: dict) -> str:
@@ -55,9 +73,16 @@ def _brand_directives(brand: dict) -> str:
     cols = [c for c in (brand.get("colors") or []) if c]
     if cols:
         bits.append(f"Use this exact brand color palette: {', '.join(cols)}.")
-    bits.append("Premium, high-end editorial magazine aesthetic, cinematic lighting, strong focal subject, "
-                "clean negative space for text, sharp, professional studio quality, tasteful depth of field.")
     return " ".join(bits)
+
+
+def _style_directive(brand: dict) -> str:
+    return STYLE_PRESETS.get(brand.get("image_style") or "infographic", STYLE_PRESETS["infographic"])
+
+
+async def _get_brand(user_id: str) -> dict:
+    u = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    return ((u or {}).get("preferences") or {}).get("brand") or {}
 
 
 class PostUpdateIn(BaseModel):
@@ -93,7 +118,8 @@ def _extract_json(text):
 async def get_brand(user: dict = Depends(require_social)):
     brand = await _get_brand(user["user_id"])
     u = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
-    return {"brand": brand, "has_logo": ((u or {}).get("preferences") or {}).get("has_logo", False)}
+    return {"brand": brand, "has_logo": ((u or {}).get("preferences") or {}).get("has_logo", False),
+            "styles": STYLE_LABELS}
 
 
 @social_router.put("/brand")
@@ -110,6 +136,7 @@ async def make_plan(body: PlanIn, user: dict = Depends(require_social)):
     n = max(1, min(8, body.count))
     brand = await _get_brand(user["user_id"])
     brand_line = _brand_directives(brand)
+    style_line = _style_directive(brand)
     tone = (body.tone or "warm, cinematic, confident").strip()
     system = ("You are SOCIAL DIRECTOR, an elite agentic social media strategist and copywriter for LUMIÈRE "
               "(a cinematic content studio). Return ONLY valid minified JSON. All human-facing text fields MUST be "
@@ -120,13 +147,15 @@ async def make_plan(body: PlanIn, user: dict = Depends(require_social)):
     prompt = (
         f"Creator ideas/brief: {body.brief!r}. Desired tone: {tone}.\n"
         f"Brand context for the visuals: {brand_line}\n"
+        f"Visual style REQUIRED for every design_prompt: {style_line}\n"
         f"Produce a JSON object: {{\"plan\": {{\"summary\": bilingual, \"strategy\": bilingual}}, "
         f"\"posts\": array of exactly {n} objects {{\"title\": bilingual short, \"caption\": bilingual "
         "EXTENSIVE (90-160 words, hook + \\n\\n paragraphs + CTA, sparing emojis), "
         "\"hashtags\": array of 6-10 relevant strings (no # inside), "
         f"\"network\": one of {NETWORKS}, \"design_prompt\": a rich, detailed English image-generation prompt "
-        "(subject, composition, lighting, mood, and the brand palette/aesthetic above) for a premium on-brand "
-        "cinematic social graphic, \"best_time\": bilingual suggested day/time}}}}."
+        "that FOLLOWS the required visual style above (describe the illustrated subject, layout, title area and "
+        "bullet/checklist content, and the brand palette) — do NOT describe photographs of real people, "
+        "\"best_time\": bilingual suggested day/time}}}}."
     )
     chat = LlmChat(api_key=EMERGENT_KEY, session_id=f"social:{user['user_id']}:{uuid.uuid4().hex[:8]}",
                    system_message=system).with_model("gemini", TEXT_MODEL)
@@ -174,11 +203,12 @@ async def generate_design(post_id: str, user: dict = Depends(require_social)):
     import asyncio
     post = await _get_post(post_id, user)
     brand = await _get_brand(user["user_id"])
-    base_prompt = (post.get("design_prompt") or "Cinematic on-brand social graphic, warm golden light, "
-                   "editorial, premium film aesthetic")
-    prompt = f"{base_prompt}. {_brand_directives(brand)}"
+    base_prompt = (post.get("design_prompt") or "Educational post about the brand's core value")
+    prompt = f"{_style_directive(brand)}\nTOPIC/SUBJECT: {base_prompt}.\n{_brand_directives(brand)}"
     chat = LlmChat(api_key=EMERGENT_KEY, session_id=f"social-img:{post_id}:{uuid.uuid4().hex[:6]}",
-                   system_message="You generate premium, professional, high-end cinematic social media graphics with clean composition.")
+                   system_message=("You generate premium BRANDED MARKETING GRAPHICS (flat/3D illustrations and "
+                                   "infographics). Never output photorealistic photographs of real people unless the "
+                                   "style explicitly says 'photo'. Keep composition clean with space for text."))
     chat.with_model("gemini", IMAGE_MODEL).with_params(modalities=["image", "text"])
     _text, images = await chat.send_message_multimodal_response(
         UserMessage(text=f"Create a striking, professional social media graphic (square, 1:1). {prompt}"))
@@ -190,19 +220,28 @@ async def generate_design(post_id: str, user: dict = Depends(require_social)):
     set_fields = {"image_path": put["path"]}
     unset_fields = {"overlay_path": ""}
 
-    # Auto-brand: bake the user's logo onto a copy if the brand kit enables it.
-    if brand.get("auto_logo"):
+    # Auto-brand: stamp the logo (corner) and website (footer) if enabled in the Brand Kit.
+    website = (brand.get("website") or "").strip()
+    if brand.get("auto_logo") or website:
         u = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
         lp = ((u or {}).get("preferences") or {}).get("logo_path")
-        if lp:
+        logo_bytes, logo_opts, text_opts = None, {}, {}
+        if brand.get("auto_logo") and lp:
             logo_bytes = (await asyncio.to_thread(storage.get_object, lp))[0]
-            logo_opts = {"enabled": True, "x": 0.95, "y": 0.95, "scale": 0.16, "opacity": 0.95}
-            out = await asyncio.to_thread(image_overlay.apply_overlay, img_bytes, logo_bytes, logo_opts, None)
-            opath = f"{storage.APP_NAME}/social/{user['user_id']}/{post_id}_overlay.png"
-            oput = await asyncio.to_thread(storage.put_object, opath, out, "image/png")
-            set_fields["overlay_path"] = oput["path"]
-            set_fields["overlay_opts"] = {"logo": logo_opts, "text": {}}
-            unset_fields = {}
+            logo_opts = {"enabled": True, "x": 0.96, "y": 0.05, "scale": 0.16, "opacity": 0.98}
+        if website:
+            color = (brand.get("colors") or ["#111111"])[0]
+            text_opts = {"enabled": True, "content": website, "position": "bottom", "color": color, "size": 0.035}
+        if logo_bytes or text_opts:
+            try:
+                out = await asyncio.to_thread(image_overlay.apply_overlay, img_bytes, logo_bytes, logo_opts, text_opts)
+                opath = f"{storage.APP_NAME}/social/{user['user_id']}/{post_id}_overlay.png"
+                oput = await asyncio.to_thread(storage.put_object, opath, out, "image/png")
+                set_fields["overlay_path"] = oput["path"]
+                set_fields["overlay_opts"] = {"logo": logo_opts, "text": text_opts}
+                unset_fields = {}
+            except Exception as e:
+                logger.warning(f"auto-brand overlay failed: {e}")
 
     op = {"$set": set_fields}
     if unset_fields:

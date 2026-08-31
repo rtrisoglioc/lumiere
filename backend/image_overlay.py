@@ -4,7 +4,9 @@ Recomposites from the ORIGINAL image every time (non-destructive) so overlays
 can be re-edited or removed."""
 import io
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFile
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 FONT_BOLD = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
 FONT_REG = "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
