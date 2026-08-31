@@ -1,0 +1,26 @@
+{
+  "summary": "Iteration 5: Static AST/py_compile verification of the Cloud Run gateway (/app/gateway/server.py) plus regression tests on the serving Emergent FastAPI backend. All 11 pytest tests passed (7 static + 4 regression). Gateway code correctly replaces the broken `.query()` call with `create_session`/`get_session` + `stream_query`, wraps events via `_to_jsonable`, extracts session id via `_session_id`, and returns `{session_id, events}`. Both `/agent` (sync) and `/vision` (async) endpoints call `_query`. Serving backend golden path (/api/agent/health, /api/partner/health, /api/auth/me with Bearer e2e_1788105676, POST /api/experiences + POST /api/experiences/{id}/plan) all return 200; plan.title is bilingual (en/es) and missions list is non-empty.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_gateway_static_and_backend_regression.py",
+    "/app/test_reports/pytest/iteration_5.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "gateway/server.py: `_query` is synchronous and iterates `stream_query` — acceptable for Cloud Run; consider `async_stream_query` if endpoint becomes async in future.",
+    "gateway/server.py: `_to_jsonable` uses `json.dumps` with `default=` — safe fallback. Good.",
+    "gateway/server.py: `run_agent` is sync but `_query` performs blocking network I/O — under FastAPI it will run in threadpool, OK for now but consider making it async for higher concurrency.",
+    "gateway/server.py imports env vars at module top (GOOGLE_CLOUD_PROJECT, VERTEX_AGENT_ENGINE_ID) causing KeyError at import if missing — appropriate fail-fast for Cloud Run but blocks any static import outside GCP (confirmed)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_gateway_static_and_backend_regression.py"
+  ],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "not tested (out of scope)"},
+  "test_credentials": "Bearer e2e_1788105676 (from review_request, verified working against /api/auth/me).",
+  "seed_data_creation": "Created ephemeral experience 'TEST_LUMIERE regression' via POST /api/experiences during regression test; no cleanup performed (record left in DB with TEST_ prefix).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "gateway/server.py cannot be imported in this environment (requires GOOGLE_CLOUD_PROJECT + VERTEX_AGENT_ENGINE_ID + live ADC). Use AST/py_compile static verification only. Serving backend does NOT import gateway/ — regression path is stable. /plan endpoint requires body {\"intent\": \"...\"} and returns {plan:{title:{en,es}, missions:[...]}, missions:{missions:[...]}, context:{...}}. Gemini call takes ~20s so use timeout>=30s.",
+  "rca of the issue": "Root cause of production error `agent_engine_error: 'AgentEngine' object has no attribute 'query'`: google-cloud-aiplatform 1.165.1's AgentEngine surface removed `.query()`; only stream_query/async_stream_query/create_session/get_session/list_sessions exist. Mitigation applied in /app/gateway/server.py _query(): (1) resolve/create session first (session_id must exist in engine), (2) iterate a.stream_query(user_id, session_id, message) and coerce each event via _to_jsonable(), (3) return JSON-serializable {session_id, events}. Both /agent and /vision now go through the same fixed helper. Verified statically via AST — cannot run gateway here (no GCP creds), but code shape matches SDK contract."
+}

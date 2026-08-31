@@ -41,11 +41,30 @@ def _auth(authorization):
         raise HTTPException(status_code=401, detail="unauthorized")
 
 
+def _to_jsonable(obj):
+    """Coerce an ADK event / session (dict or object) into JSON-serializable form."""
+    try:
+        return json.loads(json.dumps(obj, default=lambda o: getattr(o, "__dict__", str(o))))
+    except Exception:
+        return str(obj)
+
+
+def _session_id(session):
+    if isinstance(session, dict):
+        return session.get("id") or session.get("session_id") or session.get("sessionId")
+    return getattr(session, "id", None) or getattr(session, "session_id", None)
+
+
 def _query(operation, payload, session_id, user_id="lumiere"):
     message = json.dumps({"operation": operation, "payload": payload})
-    sid = session_id or f"s_{uuid.uuid4().hex[:12]}"
-    result = agent().query(user_id=user_id, session_id=sid, message=message)
-    return result
+    a = agent()
+    if session_id:
+        session = a.get_session(user_id=user_id, session_id=session_id)
+    else:
+        session = a.create_session(user_id=user_id)
+    sid = _session_id(session) or session_id
+    events = [_to_jsonable(event) for event in a.stream_query(user_id=user_id, session_id=sid, message=message)]
+    return {"session_id": sid, "events": events}
 
 
 def _upload_gcs(local_path, dest, content_type):
