@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Sparkles, Lock, Loader2, Image as ImageIcon, CalendarClock, Send, Trash2, Wand2, Palette } from "lucide-react";
+import { Sparkles, Lock, Loader2, Image as ImageIcon, CalendarClock, Send, Trash2, Wand2, Palette, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { api, API, getToken } from "@/lib/api";
 import { useI18n } from "@/i18n";
@@ -53,10 +53,13 @@ export default function SocialStudio() {
   const [brand, setBrand] = useState({ name: "", colors: ["#D6A85F", "#111111", "#F5F1E8"], auto_logo: false, image_style: "infographic", website: "" });
   const [brandStyles, setBrandStyles] = useState(["infographic", "illustration3d", "flatvector", "minimal", "photo"]);
   const [savingBrand, setSavingBrand] = useState(false);
+  const [hasLogo, setHasLogo] = useState(false);
+  const [logoBust, setLogoBust] = useState(Date.now());
+  const logoRef = useRef();
 
   const loadAccount = async () => { try { const r = await api.get("/account"); setAccount(r.data); } catch { /* */ } };
   const loadPosts = async () => { try { const r = await api.get("/social/posts"); setPosts(r.data); } catch { /* */ } };
-  const loadBrand = async () => { try { const r = await api.get("/social/brand"); if (r.data.styles) setBrandStyles(r.data.styles); if (r.data.brand) setBrand((b) => ({ ...b, ...r.data.brand, colors: r.data.brand.colors?.length ? r.data.brand.colors : b.colors })); } catch { /* */ } };
+  const loadBrand = async () => { try { const r = await api.get("/social/brand"); setHasLogo(r.data.has_logo); if (r.data.styles) setBrandStyles(r.data.styles); if (r.data.brand) setBrand((b) => ({ ...b, ...r.data.brand, colors: r.data.brand.colors?.length ? r.data.brand.colors : b.colors })); } catch { /* */ } };
   useEffect(() => { loadAccount(); }, []);
   useEffect(() => { if (account?.entitlements?.social) { loadPosts(); loadBrand(); } }, [account]);
 
@@ -65,6 +68,19 @@ export default function SocialStudio() {
     try { await api.put("/social/brand", brand); toast.success(lang === "es" ? "Marca guardada" : "Brand saved"); }
     catch { toast.error("Failed"); } finally { setSavingBrand(false); }
   };
+
+  const uploadLogo = async (e) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    const fd = new FormData(); fd.append("file", f);
+    try {
+      await api.post("/me/logo", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      setHasLogo(true); setLogoBust(Date.now());
+      setBrand((b) => ({ ...b, auto_logo: true }));
+      await api.put("/social/brand", { auto_logo: true });
+      toast.success(lang === "es" ? "Logo subido — se estampará en la esquina" : "Logo uploaded — it will be stamped in the corner");
+    } catch { toast.error(lang === "es" ? "Falló la subida (usa PNG)" : "Upload failed (use PNG)"); }
+  };
+  const logoUrl = `${API}/me/logo?auth=${encodeURIComponent(getToken() || "")}&b=${logoBust}`;
 
   const entitled = account?.entitlements?.social;
 
@@ -181,6 +197,20 @@ export default function SocialStudio() {
                   <input value={brand.website || ""} data-testid="brand-website" onChange={(e) => setBrand({ ...brand, website: e.target.value })}
                     placeholder="www.tuempresa.com" className="w-full bg-white border border-lumiere-ink/15 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-lumiere-gold" />
                 </div>
+              </div>
+              <div className="flex items-center gap-4 mt-4 border-t border-lumiere-ink/10 pt-4">
+                <div className="h-14 w-14 rounded-lg border border-lumiere-ink/15 bg-white flex items-center justify-center overflow-hidden shrink-0" data-testid="brand-logo-preview">
+                  {hasLogo ? <img src={logoUrl} alt="logo" className="max-h-full max-w-full object-contain" /> : <ImageIcon size={18} className="text-lumiere-ink/25" />}
+                </div>
+                <div className="flex-1">
+                  <span className="font-mono text-[0.55rem] uppercase tracking-widest text-lumiere-ink/40 block">{lang === "es" ? "Logo de empresa" : "Company logo"}</span>
+                  <p className="text-[0.6rem] text-lumiere-ink/40">{hasLogo ? (lang === "es" ? "Se coloca en la esquina de cada imagen (con Logo automático)." : "Stamped in the corner of every image (with Auto logo).") : (lang === "es" ? "Sube un PNG (fondo transparente recomendado)." : "Upload a PNG (transparent background recommended).")}</p>
+                </div>
+                <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadLogo} className="hidden" data-testid="brand-logo-file" />
+                <button onClick={() => logoRef.current?.click()} data-testid="brand-logo-upload"
+                  className="inline-flex items-center gap-2 border border-lumiere-ink/20 hover:border-lumiere-gold px-4 py-2 rounded-full font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/70 transition-colors shrink-0">
+                  <Upload size={13} /> {hasLogo ? (lang === "es" ? "Reemplazar" : "Replace") : (lang === "es" ? "Subir logo" : "Upload logo")}
+                </button>
               </div>
               <p className="text-[0.6rem] text-lumiere-ink/40 mt-3">{lang === "es" ? "El estilo define el tipo de imagen IA (infografías/ilustración, no fotos). Con Logo automático se coloca tu logo en la esquina y tu web abajo." : "Style sets the AI image type (infographics/illustration, not photos). Auto logo stamps your logo in the corner and your website at the bottom."}</p>
             </div>

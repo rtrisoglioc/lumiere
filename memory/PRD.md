@@ -240,4 +240,5 @@ LUMIÈRE turns real lived experiences into cinema through an agentic closed loop
 - Auto-brand: `generate_design` stamps the logo in a corner (x=0.96,y=0.05) and the website URL at the footer when set. Overlay is now non-fatal (try/except) and PIL uses `LOAD_TRUNCATED_IMAGES=True` (Gemini PNGs were sometimes truncated → fixed OSError broken data stream).
 - Verified: generated a real infographic (3D character + title + checklist + purple brand bg + "www.redagilelatam.com" footer + corner logo) — matches the user's references. `/social/brand` returns `styles` list.
 - Frontend `SocialStudio.jsx`: Brand Kit now has a Visual Style dropdown (data-testid brand-style) + Website field (brand-website).
+- Brand Kit LOGO UPLOAD (2026-06): logo upload + live preview directly in the Brand Kit (data-testid brand-logo-upload / brand-logo-file / brand-logo-preview); uploading auto-enables `auto_logo`. Verified end-to-end: uploaded a "RED AGILE" logo → it is stamped in the top-right corner of the generated infographic, with the website at the footer. (POST /me/logo accepts png/jpeg/webp, stored via storage; served at /me/logo?auth=token.)
 
