@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import {
   Clapperboard, Camera, Gauge, Scissors, Terminal, Upload, Sparkles,
-  Play, AlertTriangle, Wand2, Loader2, Film,
+  Play, AlertTriangle, Wand2, Loader2, Film, X, Trash2,
 } from "lucide-react";
 import { api, fileUrl } from "@/lib/api";
 import { useI18n } from "@/i18n";
@@ -168,6 +168,27 @@ export default function Experience() {
       toast.success("Re-editing");
     } catch { toast.error("Revise failed"); }
     finally { setRevising(false); }
+  };
+
+  const removeClip = async (cutId, assetId) => {
+    try {
+      await api.post(`/cuts/${cutId}/remove-clip`, { asset_id: assetId });
+      await fetchExp(); await fetchRuns();
+      toast.success(lang === "es" ? "Clip quitado — nueva versión" : "Clip removed — new version");
+    } catch (e) { toast.error(errMsg(e, "Failed")); }
+  };
+
+  const deleteCut = async (cutId) => {
+    try {
+      await api.delete(`/cuts/${cutId}`);
+      await fetchExp();
+      toast.success(lang === "es" ? "Corte borrado (originales intactos)" : "Cut deleted (originals kept)");
+    } catch (e) { toast.error(errMsg(e, "Failed")); }
+  };
+
+  const clipName = (assetId) => {
+    const m = (exp.media || []).find((x) => x.id === assetId);
+    return m?.original_filename || assetId?.slice(0, 8);
   };
 
   if (!exp) {
@@ -501,13 +522,46 @@ export default function Experience() {
                           {c.instruction && <p className="text-sm text-zinc-300 mt-2 screenplay"><span className="name text-lumiere-orange">YOU</span> — “{c.instruction}”</p>}
                           {c.reviser_summary && <p className="text-sm text-zinc-400 mt-1 screenplay"><span className="name text-lumiere-cyan">REVISER</span> — {bl(c.reviser_summary, lang)}</p>}
                           {c.requires_confirmation && <p className="text-xs text-amber-400 mt-1 flex items-center gap-1"><AlertTriangle size={12} /> {t("needsConfirm")}</p>}
+                          {c.impacted && (
+                            <p className="text-xs text-amber-400 mt-2 flex items-center gap-1" data-testid={`cut-impacted-${c.version}`}>
+                              <AlertTriangle size={12} /> {bl(c.impact_reason, lang) || (lang === "es" ? "Corte afectado por un clip borrado" : "Cut impacted by a deleted clip")}
+                            </p>
+                          )}
                           {c.edit_decisions?.length > 0 && (
                             <p className="text-xs text-zinc-500 mt-2 font-mono">{t("editDecisions")}: {c.edit_decisions.map((d) => d.type).join(", ")}</p>
                           )}
-                          {c.status === "ready" && (
-                            <button data-testid={`play-cut-${c.version}`} onClick={() => { setTab("edit"); }}
-                              className="mt-3 inline-flex items-center gap-1.5 font-mono text-xs text-lumiere-orange hover:underline"><Play size={12} /> {t("finalFilm")}</button>
+                          {(c.edl || []).length > 0 && (
+                            <div className="mt-3">
+                              <p className="font-mono text-[0.6rem] uppercase tracking-widest text-zinc-500 mb-1.5">
+                                {lang === "es" ? "Clips del corte" : "Clips in cut"}
+                              </p>
+                              <div className="flex flex-wrap gap-2" data-testid={`cut-clips-${c.version}`}>
+                                {[...new Set((c.edl || []).map((cl) => cl.asset_id))].map((aid) => {
+                                  const distinct = new Set((c.edl || []).map((cl) => cl.asset_id)).size;
+                                  return (
+                                    <span key={aid} className="inline-flex items-center gap-1.5 border border-white/15 px-2 py-1 font-mono text-[0.6rem] text-zinc-300">
+                                      {clipName(aid)}
+                                      {distinct > 1 && (
+                                        <button data-testid={`remove-clip-${c.version}-${aid}`} onClick={() => removeClip(c.id, aid)}
+                                          title={lang === "es" ? "Quitar clip (nueva versión)" : "Remove clip (new version)"}
+                                          className="text-zinc-500 hover:text-red-400 transition-colors"><X size={11} /></button>
+                                      )}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           )}
+                          <div className="flex items-center gap-4 mt-3">
+                            {c.status === "ready" && (
+                              <button data-testid={`play-cut-${c.version}`} onClick={() => { setTab("edit"); }}
+                                className="inline-flex items-center gap-1.5 font-mono text-xs text-lumiere-orange hover:underline"><Play size={12} /> {t("finalFilm")}</button>
+                            )}
+                            <button data-testid={`delete-cut-${c.version}`} onClick={() => deleteCut(c.id)}
+                              className="inline-flex items-center gap-1.5 font-mono text-[0.6rem] uppercase tracking-widest text-zinc-500 hover:text-red-400 transition-colors">
+                              <Trash2 size={11} /> {lang === "es" ? "Borrar corte" : "Delete cut"}
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
