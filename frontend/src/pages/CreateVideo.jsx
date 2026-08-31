@@ -168,7 +168,13 @@ export default function CreateVideo() {
                     <div key={j.id} data-testid={`video-job-${j.id}`} className="rounded-2xl border border-lumiere-ink/10 bg-black overflow-hidden">
                       <div className="aspect-video bg-lumiere-ink flex items-center justify-center relative">
                         {j.status === "DONE" ? (
-                          <video src={videoSrc(j)} controls className="w-full h-full object-contain" data-testid={`video-player-${j.id}`} />
+                          <>
+                            <video src={videoSrc(j)} controls className="w-full h-full object-contain" data-testid={`video-player-${j.id}`} />
+                            <button data-testid={`video-edit-overlay-${j.id}`} onClick={() => setEditing(j)}
+                              className="absolute top-2 right-2 inline-flex items-center gap-1.5 bg-lumiere-iris/90 hover:bg-lumiere-iris text-white px-3 py-1.5 rounded-full font-mono text-[0.6rem] uppercase tracking-widest shadow-lg backdrop-blur transition-colors">
+                              <Wand2 size={12} /> {lang === "es" ? "Editar" : "Edit"}
+                            </button>
+                          </>
                         ) : j.status === "FAILED" ? (
                           <div className="text-center text-red-400"><AlertCircle size={24} className="mx-auto mb-1" /><span className="font-mono text-xs">{g(T.failed, lang)}</span></div>
                         ) : (
@@ -186,8 +192,8 @@ export default function CreateVideo() {
                       </div>
                       {j.status === "DONE" && (
                         <button data-testid={`video-edit-${j.id}`} onClick={() => setEditing(j)}
-                          className="w-full inline-flex items-center justify-center gap-2 bg-lumiere-iris/10 border-t border-lumiere-iris/30 text-lumiere-iris py-2 font-mono text-[0.6rem] uppercase tracking-widest hover:bg-lumiere-iris/20 transition-colors">
-                          <Wand2 size={13} /> {lang === "es" ? "Editar (Pro)" : "Edit (Pro)"}
+                          className="w-full inline-flex items-center justify-center gap-2 bg-lumiere-iris hover:bg-lumiere-irisHover text-white py-3 font-mono text-xs uppercase tracking-widest transition-colors shadow-[0_0_20px_rgba(114,103,168,0.35)]">
+                          <Wand2 size={15} /> {lang === "es" ? "Editar Pro · Formato, filtros y logo" : "Pro Edit · Format, filters & logo"}
                         </button>
                       )}
                     </div>
