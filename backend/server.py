@@ -2,11 +2,12 @@ import os
 import uuid
 import asyncio
 import logging
+import tempfile
 from typing import Optional
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, Form, Response, Header, Query, BackgroundTasks
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, Form, Response, Header, Query, BackgroundTasks, Request
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import StreamingResponse
@@ -22,6 +23,7 @@ import plans_store
 import music as music_lib
 import agents
 import orchestrator
+import video_editor
 from auth import exchange_session, get_current_user, logout as do_logout
 from admin import admin_router
 from social import social_router
@@ -755,17 +757,178 @@ async def video_jobs(user: dict = Depends(get_current_user)):
     return list(refreshed)
 
 
+@api.delete("/video/jobs/{job_id}")
+async def delete_video_job(job_id: str, user: dict = Depends(get_current_user)):
+    """Delete an entire AI-generated video (job record)."""
+    job = await db.video_jobs.find_one({"id": job_id, "owner": user["user_id"]}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Not found")
+    await db.video_jobs.delete_one({"id": job_id})
+    await db.deletion_events.insert_one({
+        "id": str(uuid.uuid4()), "user_id": user["user_id"], "video_job_id": job_id,
+        "type": "video_generation", "timestamp": now_iso()})
+    return {"ok": True}
+
+
+# ---------- Pro editor (Phase a) — reframe / filter / speed / logo ----------
+class LogoOpts(BaseModel):
+    enabled: bool = False
+    x: float = 0.95
+    y: float = 0.95
+    scale: float = 0.18
+    opacity: float = 0.85
+
+
+class VideoEditIn(BaseModel):
+    aspect: str = "16:9"
+    filter: str = "none"
+    speed: float = 1.0
+    logo: Optional[LogoOpts] = None
+
+
+class PrefsIn(BaseModel):
+    logo: Optional[LogoOpts] = None
+
+
+@api.post("/me/logo")
+async def upload_logo(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="logo_too_large")
+    path = f"{storage.APP_NAME}/logos/{user['user_id']}.png"
+    await asyncio.to_thread(storage.put_object, path, data, "image/png")
+    await db.users.update_one({"user_id": user["user_id"]},
+                              {"$set": {"preferences.logo_path": path, "preferences.has_logo": True}})
+    return {"ok": True, "logo_url": "/api/me/logo"}
+
+
+@api.get("/me/logo")
+async def get_logo(authorization: str = Header(default=None), auth: str = Query(default=None)):
+    token = auth or (authorization.split(" ", 1)[1] if authorization and authorization.startswith("Bearer ") else None)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    session = await _verify_token(token)
+    u = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
+    lp = (u.get("preferences") or {}).get("logo_path")
+    if not lp:
+        raise HTTPException(status_code=404, detail="no_logo")
+    data, ct = await asyncio.to_thread(storage.get_object, lp)
+    return Response(content=data, media_type="image/png")
+
+
+@api.get("/me/preferences")
+async def get_prefs(user: dict = Depends(get_current_user)):
+    u = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    prefs = u.get("preferences") or {}
+    return {"logo": prefs.get("logo"), "has_logo": prefs.get("has_logo", False)}
+
+
+@api.put("/me/preferences")
+async def put_prefs(body: PrefsIn, user: dict = Depends(get_current_user)):
+    if body.logo is not None:
+        await db.users.update_one({"user_id": user["user_id"]},
+                                  {"$set": {"preferences.logo": body.logo.model_dump()}})
+    return {"ok": True}
+
+
+@api.post("/video/jobs/{job_id}/edit")
+async def edit_video(job_id: str, body: VideoEditIn, user: dict = Depends(get_current_user)):
+    job = await db.video_jobs.find_one({"id": job_id, "owner": user["user_id"]}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Not found")
+    if job.get("status") != "DONE":
+        raise HTTPException(status_code=400, detail="job_not_ready")
+    # Source bytes: from a previous edit (object storage) or the Veo output (GCS via gateway).
+    if job.get("edited_path"):
+        src_bytes = (await asyncio.to_thread(storage.get_object, job["edited_path"]))[0]
+    elif job.get("gcs_uri"):
+        src_bytes = await asyncio.to_thread(vertex_video.download, job["gcs_uri"])
+    else:
+        raise HTTPException(status_code=400, detail="no_source")
+
+    logo_tmp = None
+    opts = body.model_dump()
+    if body.logo and body.logo.enabled:
+        u = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
+        lp = (u.get("preferences") or {}).get("logo_path")
+        if lp:
+            logo_bytes = (await asyncio.to_thread(storage.get_object, lp))[0]
+            logo_tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
+            Path(logo_tmp).write_bytes(logo_bytes)
+        await db.users.update_one({"user_id": user["user_id"]},
+                                  {"$set": {"preferences.logo": body.logo.model_dump()}})
+
+    src_tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
+    out_tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
+    Path(src_tmp).write_bytes(src_bytes)
+    try:
+        await asyncio.to_thread(video_editor.transform_video, src_tmp, out_tmp, opts, logo_tmp)
+        out_bytes = Path(out_tmp).read_bytes()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"edit_failed: {str(e)[:200]}")
+    finally:
+        for p in (src_tmp, out_tmp, logo_tmp):
+            try:
+                if p:
+                    Path(p).unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    new_id = str(uuid.uuid4())
+    edited_path = f"{storage.APP_NAME}/edits/{user['user_id']}/{new_id}.mp4"
+    await asyncio.to_thread(storage.put_object, edited_path, out_bytes, "video/mp4")
+    new_job = {
+        "id": new_id, "owner": user["user_id"], "kind": "edit", "parent_job": job_id,
+        "prompt": f"{job.get('prompt', 'edit')} · {body.aspect} · {body.filter}",
+        "options": {"aspect_ratio": body.aspect, "duration_sec": job.get("options", {}).get("duration_sec"),
+                    "filter": body.filter, "speed": body.speed},
+        "edited_path": edited_path, "status": "DONE",
+        "download_url": f"/api/video/{new_id}/download", "created_at": now_iso(),
+    }
+    await db.video_jobs.insert_one(dict(new_job))
+    new_job.pop("_id", None)
+    return new_job
+
+
 @api.get("/video/{job_id}/download")
-async def video_download(job_id: str, authorization: str = Header(default=None), auth: str = Query(default=None)):
+async def video_download(job_id: str, request: Request, authorization: str = Header(default=None), auth: str = Query(default=None)):
     token = auth or (authorization.split(" ", 1)[1] if authorization and authorization.startswith("Bearer ") else None)
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
     session = await _verify_token(token)
     job = await db.video_jobs.find_one({"id": job_id, "owner": session["user_id"]}, {"_id": 0})
-    if not job or job.get("status") != "DONE" or not job.get("gcs_uri"):
+    if not job or job.get("status") != "DONE":
         raise HTTPException(status_code=404, detail="Video not ready")
-    data = await asyncio.to_thread(vertex_video.download, job["gcs_uri"])
-    return Response(content=data, media_type="video/mp4")
+    if job.get("edited_path"):
+        data = (await asyncio.to_thread(storage.get_object, job["edited_path"]))[0]
+    elif job.get("gcs_uri"):
+        data = await asyncio.to_thread(vertex_video.download, job["gcs_uri"])
+    else:
+        raise HTTPException(status_code=404, detail="Video not ready")
+    return _ranged_video_response(data, request.headers.get("range"))
+
+
+def _ranged_video_response(data: bytes, range_header: str = None):
+    """Serve mp4 with HTTP Range support so browsers can seek/play (206 Partial Content)."""
+    total = len(data)
+    base_headers = {"Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600"}
+    if range_header and range_header.startswith("bytes="):
+        try:
+            rng = range_header.split("=", 1)[1].split(",")[0]
+            start_s, _, end_s = rng.partition("-")
+            start = int(start_s) if start_s else 0
+            end = int(end_s) if end_s else total - 1
+            end = min(end, total - 1)
+            if start > end or start >= total:
+                raise ValueError
+        except ValueError:
+            return Response(status_code=416, headers={"Content-Range": f"bytes */{total}"})
+        chunk = data[start:end + 1]
+        headers = {**base_headers, "Content-Range": f"bytes {start}-{end}/{total}",
+                   "Content-Length": str(len(chunk))}
+        return Response(content=chunk, status_code=206, media_type="video/mp4", headers=headers)
+    return Response(content=data, media_type="video/mp4",
+                    headers={**base_headers, "Content-Length": str(total)})
 
 
 # ---------- file streaming ----------

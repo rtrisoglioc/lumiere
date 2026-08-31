@@ -1,11 +1,12 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Sparkles, Lock, Loader2, Film, AlertCircle } from "lucide-react";
+import { Sparkles, Lock, Loader2, Film, AlertCircle, Trash2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, API, getToken } from "@/lib/api";
 import { useI18n } from "@/i18n";
 import { Header } from "@/components/Header";
+import { VideoEditor } from "@/components/VideoEditor";
 
 const g = (o, lang) => (o ? o[lang] : "");
 const ASPECTS = ["16:9", "9:16"];
@@ -41,6 +42,7 @@ export default function CreateVideo() {
   const [duration, setDuration] = useState(8);
   const [busy, setBusy] = useState(false);
   const [jobs, setJobs] = useState([]);
+  const [editing, setEditing] = useState(null);
   const pollRef = useRef(null);
 
   const loadAccount = async () => { try { const r = await api.get("/account"); setAccount(r.data); } catch { /* */ } };
@@ -76,6 +78,14 @@ export default function CreateVideo() {
   };
 
   const videoSrc = (job) => `${API}/video/${job.id}/download?auth=${encodeURIComponent(getToken() || "")}`;
+
+  const deleteJob = async (jobId) => {
+    try {
+      await api.delete(`/video/jobs/${jobId}`);
+      setJobs((j) => j.filter((x) => x.id !== jobId));
+      toast.success(lang === "es" ? "Video eliminado" : "Video deleted");
+    } catch { toast.error("Failed"); }
+  };
 
   return (
     <div className="min-h-screen bg-lumiere-ivory text-lumiere-ink">
@@ -165,10 +175,21 @@ export default function CreateVideo() {
                           <div className="text-center text-lumiere-iris"><Loader2 size={24} className="mx-auto mb-1 animate-spin" /><span className="font-mono text-xs uppercase tracking-widest">{g(T.running, lang)}</span></div>
                         )}
                       </div>
-                      <div className="p-3 bg-lumiere-warm">
-                        <p className="text-xs text-lumiere-ink/70 line-clamp-2">{j.prompt}</p>
-                        <p className="font-mono text-[0.6rem] text-lumiere-ink/40 mt-1 uppercase">{j.options?.aspect_ratio} · {j.options?.duration_sec}s</p>
+                      <div className="p-3 bg-lumiere-warm flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs text-lumiere-ink/70 line-clamp-2">{j.prompt}</p>
+                          <p className="font-mono text-[0.6rem] text-lumiere-ink/40 mt-1 uppercase">{j.options?.aspect_ratio} · {j.options?.duration_sec}s</p>
+                        </div>
+                        <button data-testid={`video-delete-${j.id}`} onClick={() => deleteJob(j.id)}
+                          title={lang === "es" ? "Eliminar video" : "Delete video"}
+                          className="text-lumiere-ink/40 hover:text-red-600 transition-colors shrink-0"><Trash2 size={15} /></button>
                       </div>
+                      {j.status === "DONE" && (
+                        <button data-testid={`video-edit-${j.id}`} onClick={() => setEditing(j)}
+                          className="w-full inline-flex items-center justify-center gap-2 bg-lumiere-iris/10 border-t border-lumiere-iris/30 text-lumiere-iris py-2 font-mono text-[0.6rem] uppercase tracking-widest hover:bg-lumiere-iris/20 transition-colors">
+                          <Wand2 size={13} /> {lang === "es" ? "Editar (Pro)" : "Edit (Pro)"}
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -177,6 +198,11 @@ export default function CreateVideo() {
           </>
         )}
       </main>
+      {editing && (
+        <VideoEditor job={editing} lang={lang}
+          onClose={() => setEditing(null)}
+          onDone={(newJob) => { setJobs((j) => [newJob, ...j]); loadAccount(); }} />
+      )}
     </div>
   );
 }

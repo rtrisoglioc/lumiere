@@ -167,12 +167,12 @@ export default function SocialStudio() {
                         <span className={`absolute top-2 right-2 font-mono text-[0.55rem] uppercase tracking-widest border rounded-full px-2 py-0.5 bg-lumiere-warm ${STATUS_COLOR[p.status] || ""}`}>{p.status}</span>
                       </div>
                       <div className="p-5 flex flex-col flex-1">
-                        <h3 className="font-display text-lg">{g(p.title, lang)}</h3>
+                        <h3 className="font-display text-xl">{g(p.title, lang)}</h3>
                         <textarea value={g(p.caption, lang)} onChange={(e) => updatePost(p.id, { caption: { ...(p.caption || {}), [lang]: e.target.value } })}
-                          rows={2} data-testid={`social-caption-${p.id}`}
-                          className="mt-2 w-full bg-white border border-lumiere-ink/10 rounded-lg p-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-lumiere-iris" />
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {(p.hashtags || []).map((h, i) => <span key={i} className="font-mono text-[0.6rem] text-lumiere-iris">#{h}</span>)}
+                          rows={3} data-testid={`social-caption-${p.id}`}
+                          className="mt-2 w-full bg-white border border-lumiere-ink/10 rounded-lg p-2.5 text-base leading-relaxed resize-none focus:outline-none focus:ring-1 focus:ring-lumiere-iris" />
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {(p.hashtags || []).map((h, i) => <span key={i} className="font-mono text-xs text-lumiere-iris">#{h}</span>)}
                         </div>
                         <div className="grid grid-cols-2 gap-2 mt-4">
                           <div>

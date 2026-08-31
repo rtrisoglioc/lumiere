@@ -152,3 +152,24 @@ LUMIÈRE turns real lived experiences into cinema through an agentic closed loop
 - Long video (Cinematic Sequence, multi-clip FFmpeg stitch): awaiting user's duration-cap choice.
 - Parallel context real sources: awaiting Agent Engine redeploy (PARALLEL_MODE=basic).
 
+
+---
+
+## VIDEO PLAYBACK FIX + PRO EDITOR (Phase a) — 2026-06 (tested: iteration_9 & iteration_10)
+
+### Bug fix — AI videos wouldn't play (iteration_9, 100%)
+- Root cause: `/api/video/{id}/download` returned 200 and ignored the Range header (no Accept-Ranges). Veo mp4s (moov atom at end) wouldn't play in Chrome → stuck at 0:00 black.
+- Fix: `_ranged_video_response()` — full HTTP Range support (206 Partial Content + Accept-Ranges + Content-Range). Edited videos also written with `-movflags +faststart`.
+- Also added DELETE /api/video/jobs/{id} (delete whole generation) + UI trash button; Social post caption text enlarged (text-base/xl).
+
+### Pro Editor Phase (a) for AI videos (iteration_10 — backend 100%, frontend ~92%)
+- `video_editor.py::transform_video()`: ONE-pass FFmpeg — speed (setpts/atempo), reframe 16:9/9:16/1:1 (scale cover + center crop), color looks (cinematic/warm/cool/bw/vivid), PNG logo overlay `overlay=x=(W-w)*xf:y=(H-h)*yf` (position as frame fractions → auto-recomputes on reframe), faststart output.
+- Endpoints: POST /video/jobs/{id}/edit → new job kind='edit' stored in object storage (`edited_path`, originals untouched); /me/logo upload+get; /me/preferences GET/PUT (per-user logo position/size/opacity). video_download serves edited_path from object storage with Range.
+- Frontend `components/VideoEditor.jsx`: modal with live preview (video + CSS filter + positioned logo img), aspect/filter/speed pills, logo upload + 3x3 grid + X/Y/size/opacity sliders, saved preference, export → new job. Export hardened against transient proxy errors (detects the created job).
+
+### STILL PENDING (user asked "Ambos" for format + Social logo on images)
+- P1: Reframe/filter editor on EXPERIENCE CUTS (only AI videos done). video_editor.transform_video is reusable — wire into render_cut_task / a cut-edit endpoint.
+- P1: Logo/text overlay on SOCIAL post IMAGES (the current logo editor targets videos).
+- P2: Editor Phase (b): visual timeline, trim handles, text/titles, music track.
+- Code hygiene: server.py ~983 lines — split into routers (video/editor/files/social/admin) when convenient.
+
