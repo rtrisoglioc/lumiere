@@ -2,11 +2,13 @@ import os
 import uuid
 import asyncio
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, UploadFile, File, Form, Response, Header, Query, BackgroundTasks
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
+from starlette.responses import StreamingResponse
 
 from db import db, now_iso, WORKDIR
 import storage
@@ -15,9 +17,12 @@ from agent_adapter import agent_builder
 from partner_adapter import partner
 from vertex_video_adapter import vertex_video
 import plans as plan_catalog
+import plans_store
 import music as music_lib
 import agents
 from auth import exchange_session, get_current_user, logout as do_logout
+from admin import admin_router
+from social import social_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("lumiere")
@@ -436,28 +441,36 @@ async def compute_usage(user: dict) -> dict:
     uid = user["user_id"]
     exp_count = await db.experiences.count_documents({"owner": uid})
     cut_count = await db.cut_versions.count_documents({"owner": uid})
-    gen_count = await db.video_jobs.count_documents({"owner": uid})
+    gen_count = await video_used_this_month(uid)
     return {"experiences": exp_count, "cuts": cut_count, "ai_generations": gen_count}
+
+
+async def video_used_this_month(uid: str) -> int:
+    ym = datetime.now(timezone.utc).strftime("%Y-%m")
+    return await db.video_jobs.count_documents(
+        {"owner": uid, "kind": "generate", "created_at": {"$regex": f"^{ym}"}})
 
 
 @api.get("/account")
 async def get_account(user: dict = Depends(get_current_user)):
     plan_id = user.get("plan") or "free"
-    plan = plan_catalog.get_plan(plan_id)
+    plan = await plans_store.get_plan(plan_id)
     usage = await compute_usage(user)
     return {"user": {k: user.get(k) for k in ("user_id", "email", "name", "picture")},
-            "plan": plan, "usage": usage, "limits": plan["limits"]}
+            "is_admin": user.get("is_admin", False),
+            "plan": plan, "usage": usage, "limits": plan["limits"],
+            "entitlements": plan.get("entitlements", {})}
 
 
 @api.get("/pricing/plans")
 async def pricing_plans(user: dict = Depends(get_current_user)):
-    return {"plans": plan_catalog.PLANS, "faq": plan_catalog.FAQ,
+    return {"plans": await plans_store.list_plans(), "faq": plan_catalog.FAQ,
             "current_plan": user.get("plan") or "free", "version": plan_catalog.PLANS_VERSION}
 
 
 @api.post("/account/plan")
 async def set_plan(body: PlanIn2, user: dict = Depends(get_current_user)):
-    plan = plan_catalog.get_plan(body.plan)
+    plan = await plans_store.get_plan(body.plan)
     await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"plan": plan["id"]}})
     return {"ok": True, "plan": plan}
 
@@ -468,41 +481,59 @@ async def get_music(user: dict = Depends(get_current_user)):
     return await music_lib.list_tracks()
 
 
-# ---------- AI video (Vertex/Veo — mocked adapter) ----------
+# ---------- AI video (Vertex/Veo via Cloud Run gateway) ----------
 @api.get("/video/health")
 async def video_health():
     return vertex_video.status()
 
 
+async def _refresh_job(job: dict) -> dict:
+    """Poll the gateway for a RUNNING job and persist status transitions."""
+    op = job.get("operation_name")
+    if job.get("status") not in ("RUNNING", "QUEUED") or not op:
+        return job
+    try:
+        st = await asyncio.to_thread(vertex_video.poll, op)
+    except Exception as e:
+        await db.video_jobs.update_one({"id": job["id"]}, {"$set": {"last_error": str(e)[:200]}})
+        return job
+    upd = {}
+    if st.get("done"):
+        if st.get("status") == "DONE" and st.get("gcs_uri"):
+            upd = {"status": "DONE", "gcs_uri": st["gcs_uri"],
+                   "download_url": f"/api/video/{job['id']}/download", "completed_at": now_iso()}
+        else:
+            upd = {"status": "FAILED", "error": st.get("error", "failed")}
+    else:
+        upd = {"status": "RUNNING", "progress": st.get("progress")}
+    await db.video_jobs.update_one({"id": job["id"]}, {"$set": upd})
+    return {**job, **upd}
+
+
 @api.post("/video/generate")
 async def video_generate(body: VideoGenIn, user: dict = Depends(get_current_user)):
-    result = vertex_video.generate(body.prompt, body.model_dump())
+    plan = await plans_store.get_plan(user.get("plan") or "free")
+    if not (plan.get("entitlements") or {}).get("video"):
+        raise HTTPException(status_code=403, detail="video_not_entitled")
+    quota = (plan.get("limits") or {}).get("ai_generations", 0)
+    used = await video_used_this_month(user["user_id"])
+    if used >= quota:
+        raise HTTPException(status_code=403, detail="quota_exceeded")
+    if not vertex_video.connected:
+        raise HTTPException(status_code=503, detail="veo_gateway_not_configured")
+    try:
+        sub = await asyncio.to_thread(vertex_video.submit, body.prompt, body.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"veo_submit_failed: {str(e)[:200]}")
     job = {
         "id": str(uuid.uuid4()),
         "owner": user["user_id"],
         "kind": "generate",
         "prompt": body.prompt,
         "options": body.model_dump(),
-        "status": result["status"],
-        "result": result,
-        "created_at": now_iso(),
-    }
-    await db.video_jobs.insert_one(dict(job))
-    job.pop("_id", None)
-    return job
-
-
-@api.post("/video/enhance")
-async def video_enhance(body: VideoEnhanceIn, user: dict = Depends(get_current_user)):
-    result = vertex_video.enhance(body.asset_id, body.model_dump())
-    job = {
-        "id": str(uuid.uuid4()),
-        "owner": user["user_id"],
-        "kind": "enhance",
-        "asset_id": body.asset_id,
-        "options": body.model_dump(),
-        "status": result["status"],
-        "result": result,
+        "operation_name": sub.get("operation_name"),
+        "model": sub.get("model"),
+        "status": "RUNNING",
         "created_at": now_iso(),
     }
     await db.video_jobs.insert_one(dict(job))
@@ -512,7 +543,22 @@ async def video_enhance(body: VideoEnhanceIn, user: dict = Depends(get_current_u
 
 @api.get("/video/jobs")
 async def video_jobs(user: dict = Depends(get_current_user)):
-    return await db.video_jobs.find({"owner": user["user_id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    jobs = await db.video_jobs.find({"owner": user["user_id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    refreshed = await asyncio.gather(*[_refresh_job(j) for j in jobs])
+    return list(refreshed)
+
+
+@api.get("/video/{job_id}/download")
+async def video_download(job_id: str, authorization: str = Header(default=None), auth: str = Query(default=None)):
+    token = auth or (authorization.split(" ", 1)[1] if authorization and authorization.startswith("Bearer ") else None)
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    session = await _verify_token(token)
+    job = await db.video_jobs.find_one({"id": job_id, "owner": session["user_id"]}, {"_id": 0})
+    if not job or job.get("status") != "DONE" or not job.get("gcs_uri"):
+        raise HTTPException(status_code=404, detail="Video not ready")
+    data = await asyncio.to_thread(vertex_video.download, job["gcs_uri"])
+    return Response(content=data, media_type="video/mp4")
 
 
 # ---------- file streaming ----------
@@ -555,6 +601,8 @@ async def startup():
 
 
 app.include_router(api)
+app.include_router(admin_router)
+app.include_router(social_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

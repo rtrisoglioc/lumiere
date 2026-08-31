@@ -4,9 +4,11 @@ operation, status, timestamp, correlation/run id). All AI outputs are bilingual.
 """
 import uuid
 import json
+import time
+import asyncio
 
 from db import db, now_iso
-from agent_adapter import agent_builder, PROXY_FAST
+from agent_adapter import agent_builder, PROXY_FAST, gateway_enabled, gateway_context
 from partner_adapter import partner
 
 BILINGUAL = ('Every human-facing text field MUST be an object {"en": "...", "es": "..."} '
@@ -61,7 +63,11 @@ def _context_text(context):
 
 async def context_agent(experience, intent, correlation_id=None):
     """CONTEXT AGENT — calls the Parallel Search API at runtime; its result feeds
-    Story Plan / Shot Missions. Runs before the Director."""
+    Story Plan / Shot Missions. Runs before the Director.
+
+    When the Cloud Run gateway is active, the Parallel call runs INSIDE the Vertex
+    AI Agent Engine (parallel_search ADK tool using the engine's own PARALLEL_API_KEY);
+    no Parallel key is needed on Emergent. Otherwise it falls back to a local call."""
     correlation_id = _cid(correlation_id)
     objective = (f"Field-production context for a {experience.get('type')} film titled "
                  f"{experience.get('title')!r}. Intent: {intent}. Surface locations, timing, "
@@ -71,21 +77,37 @@ async def context_agent(experience, intent, correlation_id=None):
         f"best time and lighting to shoot {experience.get('title')}",
         f"{intent} cinematic shooting guide",
     ]
-    result = partner.search(objective, queries)
+
+    latency_ms = None
+    if gateway_enabled():
+        try:
+            result = await asyncio.to_thread(gateway_context, objective, queries)
+            latency_ms = result.pop("latency_ms", None)
+            service, backend, provider, model = ("vertex-agent-engine", "vertex-agent-engine",
+                                                 "google", "agent-engine:context+parallel_search")
+        except Exception as e:
+            result = partner.search(objective, queries)
+            result["_gateway_error"] = str(e)[:200]
+            service, backend, provider, model = "parallel", "partner", "parallel", "parallel-search"
+    else:
+        result = partner.search(objective, queries)
+        service, backend, provider, model = "parallel", "partner", "parallel", "parallel-search"
+
     meta = {
-        "service": "parallel",
-        "operation": "search",
+        "service": service,
+        "operation": "context",
         "status": result.get("status", "not_connected"),
-        "orchestration_backend": "partner",
-        "provider": "parallel",
-        "model": "parallel-search",
-        "latency_ms": None,
+        "orchestration_backend": backend,
+        "provider": provider,
+        "model": model,
+        "latency_ms": latency_ms,
         "confidence": 0.6 if result.get("ok") else 0.0,
-        "vertex_connected": None,
-        "agent_builder_connected": False,
+        "vertex_connected": backend == "vertex-agent-engine",
+        "agent_builder_connected": backend == "vertex-agent-engine",
     }
     tools = [{"name": "parallel.search", "status": result.get("status"),
-              "queries": result.get("queries"), "mode": result.get("mode")}]
+              "queries": result.get("queries"), "mode": result.get("mode"),
+              "via": backend, "sources": len(result.get("results") or [])}]
     evidence = partner.evidence_payload(result).get("sources", [])
     await _persist_run(experience["id"], "context", meta,
                        f"parallel context: {intent[:100]}", result, tools, evidence, correlation_id)

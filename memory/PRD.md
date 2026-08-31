@@ -79,3 +79,46 @@ LUMIÈRE turns real lived experiences into cinema through an agentic closed loop
 - `backend/deploy_agent_engine.py`: keyless ADC primary (optional JSON), passes env_vars (PARALLEL_API_KEY, GCS_BUCKET, project/location) into agent_engines.create.
 - Env placeholders added: LUMIERE_GATEWAY_URL, LUMIERE_GATEWAY_TOKEN (token generated in git-ignored backend/.env).
 - No JSON key, no policy change. Golden path (DEV) re-verified working after edits.
+
+---
+
+## CHANGELOG — 2026-06 (Fork: Redesign + Admin + Veo + Social Studio)
+
+### Phase A (paused, code-ready): Parallel Context via Agent Engine
+- `agents.py::context_agent` now routes `operation="context"` through the Cloud Run gateway when enabled → the ADK `parallel_search` tool runs INSIDE the Agent Engine (uses engine's own PARALLEL_API_KEY). Trace: service=vertex-agent-engine, operation=context.
+- Root cause fixed: Parallel mode `"base"` was invalid (422) → changed to `"basic"` in `.env`, `partner_adapter.py`, `adk_app/subagents.py`.
+- `deploy_agent_engine.py` now updates in-place (same engine ID) when `VERTEX_AGENT_ENGINE_ID` is set, and always passes a valid PARALLEL_MODE.
+- STATUS: backend validated (routing/trace OK); returns real sources only AFTER user redeploys the engine with PARALLEL_MODE=basic. PENDING USER REDEPLOY.
+
+### Phase 1 — Full site redesign (DONE, tested)
+- New public landing `pages/Landing.jsx` matching reference image, keeping exact palette/fonts. Sections: hero, LoopStrip, Narrative Gap, Capture→Cinema, Crew, dark Detect-Gap band, Speak Cinema, pricing, FAQ, final CTA, footer. Bilingual ES/EN. Route `/` = Landing; `/login` kept.
+
+### Phase 2 — Admin profile + panel (DONE, tested)
+- `auth.py`: admin role from env `ADMIN_EMAILS` (currently admin@getlumiere.ai); `require_admin` dependency; `get_current_user` adds `is_admin`.
+- `admin.py` router `/api/admin/*`: overview metrics, plans GET/PUT (prices/quotas/entitlements editable at runtime), users list + change plan, video-jobs & social-posts monitors, settings.
+- `plans_store.py`: DB-backed plan overrides (site_config) with plans.py fallback. `/account`, `/pricing/plans`, `/account/plan` now async DB-backed.
+- Frontend `pages/Admin.jsx` (admin-only, redirects non-admins): tabs overview/plans/users/video/social; editable plan fields + Save.
+
+### Phase 3 — AI Video Generation via Vertex Veo (DONE backend/UI; NEEDS GATEWAY REDEPLOY)
+- Gateway `gateway/server.py`: added `/video` (submit, returns operation_name), `/video/status` (poll), `/video/download` (stream mp4 from GCS); renamed `/healthz`→`/status`. Uses google-genai + ADC. Added google-genai to gateway/requirements.txt (aiplatform preserved).
+- `vertex_video_adapter.py`: submit/poll/download via gateway (no mock).
+- `server.py /api/video/generate`: BACKEND-enforced gating — Free=403 video_not_entitled, quota (limits.ai_generations/month)=403 quota_exceeded; then submits to gateway. `/api/video/jobs` polls & updates RUNNING jobs; `/api/video/{id}/download` proxies stream.
+- Frontend `pages/CreateVideo.jsx`: prompt/aspect/duration, quota meter, jobs grid with polling + player; Free sees locked upsell.
+- BLOCKER: gateway `/video` not deployed yet → generation fails at gateway step until user redeploys gateway (Cloud Run) with the new `lumiere_deploy.zip` (apply gateway/server.py AND gateway/requirements.txt — google-genai added, aiplatform 1.165.1 preserved). Config: env `VEO_MODEL` default veo-3.0-generate-001.
+
+### Phase 4 — AI Social Content Studio (DONE, tested, Studio-exclusive)
+- `social.py` router `/api/social/*` (entitlement `social` enforced): POST /plan (Universal Key gemini text → bilingual content plan + post drafts: caption, hashtags, network, design_prompt); POST /posts/{id}/design (Nano Banana image → object storage); GET /posts/{id}/image; PUT /posts/{id}; POST /posts/{id}/schedule (network + date/time); POST /posts/{id}/publish (SIMULATED); DELETE.
+- Frontend `pages/SocialStudio.jsx`: brief→plan, post cards with AI design, network selector, datetime schedule, simulated publish. Free/Creator see locked upsell.
+- Social models env-configurable: SOCIAL_TEXT_MODEL / SOCIAL_IMAGE_MODEL.
+
+### Plans (defaults, admin-editable)
+- Free $0: no video, no social. Creator $49: video ON, 20 clips/mo. Studio $149: video expanded (100), Social Studio ON.
+
+### Testing: iteration_7.json → backend 20/20, frontend 23/23, no issues.
+
+### MOCKED / PENDING
+- Social publishing to real networks = SIMULATED (status flip only).
+- Veo video generation = blocked until gateway redeploy.
+- Parallel context real sources = blocked until Agent Engine redeploy (PARALLEL_MODE=basic).
+- No real payments (plan changes are placeholders).
+

@@ -1,7 +1,34 @@
 {
-  "theme": "dual_cinematic_editorial",
+  "theme": "hybrid (light landing page, light/dark app panels, dark cinematic sections)",
+  "typography": {
+    "fonts": [
+      {
+        "name": "Playfair Display",
+        "type": "display, headlines, serif",
+        "usage": "H1, H2, large quotes, branding text"
+      },
+      {
+        "name": "Manrope",
+        "type": "body, sans-serif",
+        "usage": "General body copy, UI text, buttons"
+      },
+      {
+        "name": "JetBrains Mono",
+        "type": "metrics, labels, technical",
+        "usage": "Usage meters, quotas, code blocks, technical stats, LoopStrip marquee"
+      }
+    ],
+    "headings": {
+      "h1": "text-5xl md:text-6xl+ tracking-tighter leading-none font-serif",
+      "h2": "text-3xl md:text-5xl tracking-tight font-serif",
+      "h3": "text-2xl md:text-3xl font-serif",
+      "h4": "text-xl font-sans font-medium"
+    },
+    "body": "text-base leading-relaxed font-sans",
+    "technical": "text-sm tracking-[0.05em] uppercase font-mono"
+  },
   "colors": {
-    "core": {
+    "palette": {
       "cinema_ivory": "#F7F3EA",
       "warm_white": "#FFFDF8",
       "lumiere_ink": "#171714",
@@ -9,145 +36,96 @@
       "sage_film": "#8E9A87",
       "iris_ai": "#7267A8"
     },
-    "light_mode": {
-      "background": "#F7F3EA",
-      "surface": "#FFFDF8",
-      "surface_hover": "#F0EBE1",
-      "text_primary": "#171714",
-      "text_secondary": "#17171480",
-      "border": "#1717141A",
-      "accent_primary": "#D6A85F",
-      "accent_secondary": "#8E9A87",
-      "ai_state": "#7267A8"
-    },
     "dark_mode": {
-      "background": "#171714",
+      "bg": "#171714",
       "surface": "#232320",
-      "surface_hover": "#2C2C28",
-      "text_primary": "#F7F3EA",
-      "text_secondary": "#F7F3EA80",
-      "border": "#F7F3EA1A",
-      "accent_primary": "#D6A85F",
-      "accent_secondary": "#8E9A87",
-      "ai_state": "#7267A8"
+      "surface_hover": "#2C2C28"
     },
-    "guidelines": "Use Iris AI ONLY for meaningful AI states (e.g., AI Video Generation, AI Enhance, Agent Trace). Golden Hour is the primary interaction color."
+    "rules": "DO NOT INTRODUCE NEW COLORS. Maintain the exact current palette. Use golden_hour for primary interactions, iris_ai ONLY for AI features (Video Gen, Social Studio)."
   },
-  "typography": {
-    "fonts": {
-      "display": "'Playfair Display', serif",
-      "body": "'Manrope', sans-serif",
-      "technical": "'JetBrains Mono', monospace"
+  "visual_enhancers": {
+    "glassmorphism": "backdrop-blur-xl bg-cinema_ivory/70 border-b border-lumiere_ink/5 (light) or bg-lumiere_ink/60 border-b border-warm_white/10 (dark)",
+    "borders": "1px solid (light: border-lumiere_ink/10, dark: border-warm_white/10). No soft muddy shadows.",
+    "marquee": "LoopStrip marquee: JetBrains Mono text, slow scroll, uppercase. Colors depend on light/dark mode section.",
+    "buttons": "Pill-shaped (rounded-full). Primary: bg-golden_hour text-white hover:bg-golden_hour/90. AI Action: bg-iris_ai text-white hover:bg-iris_ai/90. Secondary: border border-lumiere_ink text-lumiere_ink hover:bg-lumiere_ink/5.",
+    "cards": "Subtle border, max 12px border-radius (rounded-xl). Padding p-6 or p-8."
+  },
+  "component_instructions": {
+    "navigation": "Glassmorphism nav header. Logo left, Links center (Studio, Agent, Pricing), Language toggle & Sign In right.",
+    "buttons": "Follow button visual rules. Add data-testid to every interactive button.",
+    "inputs": "Use Shadcn components. Style to match editorial theme (rounded-xl, subtle borders, focus:ring-golden_hour or focus:ring-iris_ai for AI).",
+    "tables": "For Admin Panel, use clean minimal tables with JetBrains Mono for metrics and IDs.",
+    "tabs": "For Admin Panel, use pill-like or clean underline tabs."
+  },
+  "layouts": {
+    "landing_page": {
+      "hero": "Asymmetric two-column. Left: Playfair headline 'You live it. LUMIÈRE directs it.', subtitle, primary CTA. Right: cinematic video/image card with play button & floating search pill.",
+      "narrative_gap": "Centered heading. Two contrasting cards: one light image-card (bullets), one dark card (AI features with icons, Iris AI accents).",
+      "capture_to_cinema": "Numbered workflow steps on left (JetBrains Mono numbers), laptop image on right.",
+      "narrative_copilots": "Grid of 3 team/agent cards with portraits, minimal borders.",
+      "dark_band": "Full-width DARK band (bg-lumiere_ink). 'Detecting what's missing before it's gone', large bold text, device visual.",
+      "speak_cinema": "Split layout. Overlaid bilingual quote boxes.",
+      "pricing": "Studio Membership. 3 tiers (Free, Creator, Studio), monthly-yearly toggle. Highlight Creator.",
+      "faq": "Accordion.",
+      "footer": "Full-width dark final CTA card + Google sign-in. Multi-column links."
     },
-    "scale": {
-      "h1": "text-5xl md:text-6xl tracking-tighter font-display",
-      "h2": "text-4xl md:text-5xl tracking-tight font-display",
-      "h3": "text-2xl md:text-3xl tracking-tight font-display",
-      "h4": "text-xl font-display",
-      "body": "text-base font-body leading-relaxed",
-      "body_sm": "text-sm font-body leading-relaxed",
-      "label": "text-xs uppercase tracking-[0.2em] font-body font-semibold",
-      "metric": "text-sm font-technical tracking-tight"
-    }
+    "studio_dashboard": "Light mode. Welcome, active experience/continue, create-new CTA, recent grid. Plan & usage meters (JetBrains Mono).",
+    "ai_video_generator": "Light base, Iris AI accents. Prompt input, options (model/aspect/duration). 'Generate' button (Iris AI). Jobs list (pending, processing, done). Dark cinematic video monitor for playback. Show plan gating.",
+    "ai_social_studio": "Studio-plan exclusive. Iris AI accents. Input brief -> AI proposes plan -> List of posts (copy, image preview, network selector, schedule picker). Calendar view. Status chips.",
+    "admin_panel": "Tabbed CMS. Sections: plans/pricing editing, landing content editing, users list, video jobs monitor, scheduled posts monitor. Premium, on-brand look.",
+    "account": "Light mode. Profile, plan, usage, settings, privacy, sign out. No video players."
   },
-  "spacing_and_layout": {
-    "philosophy": "Generous whitespace, editorial margins. Use Tailwind scales p-6, p-8, p-12, p-16, p-24.",
-    "grid": "Bento-style asymmetric grids for experiences, strict high-density grids for studio workspaces.",
-    "container_padding": "px-6 md:px-12 lg:px-24 py-12 md:py-24"
-  },
-  "route_theme_mapping": {
-    "light": [
-      "/home", "/experiences", "/story-creation", "/profile", "/pricing", "/account", "/visual-dna", "/insights", "/ai-video-generation", "/login"
-    ],
-    "dark": [
-      "/live-director", "/footage-review", "/story-evaluation", "/editing-studio", "/film-preview", "/agent-trace", "/ai-enhance"
+  "spacing": "Generous spacing. p-12, p-16, p-24 for section padding. gap-8 to gap-16 in grids.",
+  "motion": "Framer Motion staggered reveals. Slow, cinematic entrances. 'Projection room' transition when crossing light to dark routes (a quick wipe or fade through dark).",
+  "media": {
+    "images": [
+      {
+        "description": "Hero Cinematic Video/Image (Film Operator)",
+        "url": "https://images.unsplash.com/photo-1644468840310-bf700317c1d0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzl8MHwxfHNlYXJjaHwxfHxmaWxtJTIwY2FtZXJhJTIwb3BlcmF0b3IlMjBzaWxob3VldHRlfGVufDB8fHx8MTc4ODE1MzgwMXww&ixlib=rb-4.1.0&q=85",
+        "category": "hero"
+      },
+      {
+        "description": "Laptop Mockup (Capture to Cinema)",
+        "url": "https://images.unsplash.com/photo-1531297484001-80022131f5a1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwxfHxsYXB0b3AlMjBkZXNrJTIwY2luZW1hdGljJTIwbGlnaHRpbmd8ZW58MHx8fHwxNzg4MTUzODAxfDA&ixlib=rb-4.1.0&q=85",
+        "category": "features"
+      },
+      {
+        "description": "Narrative Co-pilot 1 (Director in Red)",
+        "url": "https://images.unsplash.com/photo-1674507887380-f82e9a1eae1a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NDh8MHwxfHNlYXJjaHwyfHxjaW5lbWF0aWMlMjBmaWxtJTIwZGlyZWN0b3IlMjBwb3J0cmFpdHxlbnwwfHx8fDE3ODgxNTM4MDF8MA&ixlib=rb-4.1.0&q=85",
+        "category": "team"
+      },
+      {
+        "description": "Narrative Co-pilot 2 (Director holding camera)",
+        "url": "https://images.unsplash.com/photo-1619105182220-b2bb0459c53e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NDh8MHwxfHNlYXJjaHwxfHxjaW5lbWF0aWMlMjBmaWxtJTIwZGlyZWN0b3IlMjBwb3J0cmFpdHxlbnwwfHx8fDE3ODgxNTM4MDF8MA&ixlib=rb-4.1.0&q=85",
+        "category": "team"
+      },
+      {
+        "description": "Narrative Co-pilot 3 (Director silhouette)",
+        "url": "https://images.unsplash.com/photo-1674507887725-c50a7c844d7a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NDh8MHwxfHNlYXJjaHwzfHxjaW5lbWF0aWMlMjBmaWxtJTIwZGlyZWN0b3IlMjBwb3J0cmFpdHxlbnwwfHx8fDE3ODgxNTM4MDF8MA&ixlib=rb-4.1.0&q=85",
+        "category": "team"
+      }
     ]
   },
-  "components": {
-    "loop_strip": {
-      "description": "Signature brand device. A continuous marque or horizontal flex of the closed loop.",
-      "items": ["INTENT", "STORY", "DIRECT", "CAPTURE", "UNDERSTAND", "EVALUATE", "DETECT GAP", "GET THE SHOT", "CAPTURE AGAIN", "RE-EVALUATE", "EDIT", "LEARN"],
-      "styling": "Font-technical or small font-body, uppercase, tracking-widest, separated by dots or arrows. Subtle opacity (50%) for inactive steps, Golden Hour for active step."
-    },
-    "buttons": {
-      "primary": "bg-[#D6A85F] text-[#171714] hover:bg-[#c2954e] font-body rounded-full px-6 py-3 transition-transform active:scale-95",
-      "secondary": "border border-[#171714]/20 dark:border-[#F7F3EA]/20 text-current hover:bg-[#171714]/5 dark:hover:bg-[#F7F3EA]/5 rounded-full px-6 py-3",
-      "ai_action": "bg-[#7267A8] text-[#FFFDF8] hover:bg-[#5f5591] rounded-full px-6 py-3 shadow-[0_0_15px_rgba(114,103,168,0.4)]"
-    },
-    "plan_cards": {
-      "styling": "bg-[#FFFDF8] border border-[#171714]/10 rounded-2xl p-8. Recommended tier gets Golden Hour border and subtle drop shadow.",
-      "usage_meters": "JetBrains Mono for numbers. Progress bar uses Golden Hour for standard usage, Sage Film for optimal/under-limit, red/warning if nearing limit."
-    },
-    "experience_cards": {
-      "styling": "Editorial layout. Large image taking up 70% of card height, 30% text content below. Subtle borders, no heavy shadows. Images must have a slight vignette or overlay to ensure text contrast if text is placed over them (bg-black/30 maximum)."
-    },
-    "video_monitor": {
-      "styling": "Dark cinematic workspace component. Pure Lumiere Ink background for the player area to enhance contrast. Sharp corners, minimalistic controls. Use Iris AI for 'Enhance' or 'AI Edit' buttons overlay."
-    },
-    "music_picker": {
-      "styling": "List view with waveforms. Play button on left, track name in Playfair Display, duration in JetBrains Mono, 'Apply' button on right. Hover state highlights row in subtle Golden Hour tint."
-    },
-    "nav_header": {
-      "styling": "Glassmorphism: backdrop-blur-xl bg-[#F7F3EA]/70 (light) or bg-[#171714]/70 (dark). Includes Logo, Navigation links, Language toggle (ES/EN), and Avatar menu."
-    }
-  },
-  "motion": {
-    "light_to_dark_transition": "Cinematic 'projection room' transition. When moving from a light route (Home) to a dark route (Editing Studio), use a dramatic background color fade (duration: 0.8s, ease: 'easeInOut') simulating lights dimming in a theater.",
-    "hover_states": "Subtle y-axis lift (-translate-y-1) and opacity shifts. Never use 'transition-all', specify 'transition-transform transition-opacity transition-colors'."
-  },
-  "image_urls": {
-    "hero_landscape": {
-      "url": "https://images.pexels.com/photos/34033016/pexels-photo-34033016.jpeg",
-      "description": "Majestic Milford Sound fjord in New Zealand"
-    },
-    "ai_generation_state": {
-      "url": "https://images.pexels.com/photos/34112214/pexels-photo-34112214.jpeg",
-      "description": "Captivating mist over a Transylvanian mountain peak"
-    },
-    "experience_luxury_yacht": {
-      "url": "https://images.unsplash.com/photo-1782835576404-f5eaddd63ac3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA4Mzl8MHwxfHNlYXJjaHwyfHxsdXh1cnklMjBsaWZlc3R5bGUlMjB0cmF2ZWx8ZW58MHx8fHwxNzg4MTEzMTM3fDA&ixlib=rb-4.1.0&q=85",
-      "description": "A white yacht sails past buildings framed by trees"
-    },
-    "experience_resort": {
-      "url": "https://images.unsplash.com/photo-1782714040856-cf19b8ba888b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA4Mzl8MHwxfHNlYXJjaHw0fHxsdXh1cnklMjBsaWZlc3R5bGUlMjB0cmF2ZWx8ZW58MHx8fHwxNzg4MTEzMTM3fDA&ixlib=rb-4.1.0&q=85",
-      "description": "Luxury resort pools overlooking a serene lake"
-    },
-    "avatar_editorial": {
-      "url": "https://images.unsplash.com/photo-1568038479111-87bf80659645?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODh8MHwxfHNlYXJjaHwyfHxlZGl0b3JpYWwlMjBwb3J0cmFpdHxlbnwwfHx8fDE3ODgxMTMxMzd8MA&ixlib=rb-4.1.0&q=85",
-      "description": "Close up editorial portrait of blonde hair person"
-    },
-    "empty_state_slate": {
-      "url": "https://images.unsplash.com/photo-1485846234645-a62644f84728?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODB8MHwxfHNlYXJjaHwxfHxmaWxtJTIwcHJvZHVjdGlvbiUyMGJlaGluZCUyMHRoZSUyMHNjZW5lc3xlbnwwfHx8fDE3ODgxMTMxMzd8MA&ixlib=rb-4.1.0&q=85",
-      "description": "Clap board roadside film production"
-    }
-  },
-  "accessibility": {
-    "contrast": "Ensure APCA contrast standards. Golden Hour must have dark text on it. Iris AI must have light text on it.",
-    "testing": "All interactive elements MUST include 'data-testid' attribute (e.g., data-testid='login-button').",
-    "reduced_motion": "Respect 'prefers-reduced-motion' by disabling the projection room transition."
-  },
   "instructions_to_main_agent": [
-    "Strictly follow the color palette. Do NOT introduce new colors outside the Master Specification.",
-    "Maintain the editorial, luxury-travel personality. Use generous whitespace (p-12, p-16) and avoid cramped SaaS layouts.",
-    "Ensure Profile/Account screens contain ZERO video players. Do NOT render videos inside the user profile.",
-    "Implement the INTENT -> STORY -> DIRECT ... loop strip prominently on the Landing/Home pages.",
-    "Use JetBrains Mono exclusively for metrics, usage numbers, and technical readouts. Use Playfair Display for big impactful headings.",
-    "Implement the 'projection room' transition when crossing between light (e.g., Home) and dark (e.g., Studio) routes.",
-    "Iris AI color (#7267A8) MUST ONLY be used for AI features (generation, enhancement, Agent Trace).",
-    "Do NOT use emojis in the UI. Keep it professional, cinematic, and premium."
+    "Install required fonts from Google Fonts: Playfair Display, Manrope, JetBrains Mono.",
+    "Configure tailwind.config.js with the exact custom colors provided (cinema_ivory, warm_white, lumiere_ink, golden_hour, sage_film, iris_ai). Do not use default slate or zinc.",
+    "Implement the UI using Shadcn but heavily override styling to match this specific editorial/cinematic look (thin borders, specific radiuses, generous padding).",
+    "Ensure all interactive elements have data-testid attributes.",
+    "Implement the LoopStrip marquee using react-fast-marquee or CSS animation. It should read: INTENT → STORY → DIRECT → CAPTURE → UNDERSTAND → EVALUATE → DETECT GAP → GET THE SHOT",
+    "For the Video Generator, the AI prompt and generate flow is simulated UI for Vertex AI, highlight AI with iris_ai color.",
+    "For the Social Content Studio, build a complex layout combining post generation, image preview, scheduling, and network selection. Restrict access visually based on Studio plan.",
+    "Use Phosphor icons or Lucide icons."
   ],
-  "universal_guidelines": [
-    "Avoid generic centered layouts, simplistic gradients, and uniform styling.",
-    "Create depth through layered design elements with z-index hierarchy.",
-    "Use glass-morphism effects with backdrop filters (12-24px blur).",
-    "MUST NOT apply universal transition (transition: all).",
-    "MUST NOT center align the app container in css.",
-    "Always use modern button styles with interaction animations.",
-    "NEVER use AI assistant Emoji characters.",
-    "Use 2-3x more spacing than feels comfortable.",
-    "Add subtle grain textures, noise overlays, custom cursors.",
-    "Prioritize using pre-existing components from src/components/ui.",
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "You tend to converge toward generic outputs. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Don't make generic centered layouts. Use asymmetry and generous spacing.",
+    "Create depth through layered design elements. Use glass-morphism effects.",
+    "NEVER apply universal transition (transition: all). Add specific transitions.",
+    "NEVER center align the app container (.App { text-align: center; }).",
+    "Use modern pill-shaped or subtle rounded buttons.",
+    "NEVER use emojis for icons. Use proper icon libraries.",
+    "Include hover states and micro-animations for all interactive elements.",
     "Use sonner for toasts.",
-    "All interactive elements MUST include data-testid attribute."
+    "Do not guess or placeholder image URLs. Use the provided URLs."
   ]
 }

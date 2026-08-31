@@ -55,7 +55,7 @@ class PartnerAdapter:
         body = {
             "objective": objective,
             "search_queries": queries[:5],
-            "mode": mode or os.environ.get("PARALLEL_MODE", "base"),
+            "mode": mode or os.environ.get("PARALLEL_MODE") or "basic",
             "max_chars_total": max_chars_total,
         }
         try:

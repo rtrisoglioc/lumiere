@@ -21,9 +21,19 @@ LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
 ENGINE = os.environ["VERTEX_AGENT_ENGINE_ID"]
 GCS_BUCKET = os.environ.get("GCS_BUCKET")
 TOKEN = os.environ.get("LUMIERE_GATEWAY_TOKEN", "")
+VEO_MODEL = os.environ.get("VEO_MODEL", "veo-3.0-generate-001")
 
 vertexai.init(project=PROJECT, location=LOCATION)
 _agent = None
+_genai = None
+
+
+def genai_client():
+    global _genai
+    if _genai is None:
+        from google import genai
+        _genai = genai.Client(vertexai=True, project=PROJECT, location=LOCATION)
+    return _genai
 
 
 def agent():
@@ -82,8 +92,8 @@ class AgentIn(BaseModel):
     user_id: str | None = None
 
 
-@app.get("/healthz")
-def healthz():
+@app.get("/status")
+def status():
     return {"ok": True, "project": PROJECT, "location": LOCATION, "engine": ENGINE, "bucket": GCS_BUCKET}
 
 
@@ -118,3 +128,83 @@ async def run_vision(file: UploadFile = File(...), operation: str = Form("footag
         raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"vision_error: {str(e)[:400]}")
+
+
+# ---------- Vertex AI Veo (long-running video generation) ----------
+class VideoIn(BaseModel):
+    prompt: str
+    aspect_ratio: str = "16:9"
+    duration_sec: int = 8
+
+
+class VideoStatusIn(BaseModel):
+    operation_name: str
+
+
+@app.post("/video")
+def video_generate(body: VideoIn, authorization: str = Header(default=None)):
+    _auth(authorization)
+    try:
+        from google.genai import types
+        dur = body.duration_sec if body.duration_sec in (4, 6, 8) else 8
+        ar = body.aspect_ratio if body.aspect_ratio in ("16:9", "9:16") else "16:9"
+        prefix = f"gs://{GCS_BUCKET}/veo/{uuid.uuid4().hex}/"
+        op = genai_client().models.generate_videos(
+            model=VEO_MODEL, prompt=body.prompt[:2000],
+            config=types.GenerateVideosConfig(
+                aspect_ratio=ar, duration_seconds=dur, number_of_videos=1, output_gcs_uri=prefix),
+        )
+        if not op.name:
+            raise HTTPException(status_code=502, detail="veo returned no operation name")
+        return {"operation_name": op.name, "status": "RUNNING", "model": VEO_MODEL, "output_prefix": prefix}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"veo_submit_error: {str(e)[:400]}")
+
+
+@app.post("/video/status")
+def video_status(body: VideoStatusIn, authorization: str = Header(default=None)):
+    _auth(authorization)
+    try:
+        op = genai_client().operations.get(body.operation_name)
+        if not op.done:
+            prog = op.metadata.get("progress") if getattr(op, "metadata", None) else None
+            return {"done": False, "status": "RUNNING", "progress": prog}
+        if getattr(op, "error", None):
+            return {"done": True, "status": "FAILED", "error": str(op.error)[:400]}
+        result = getattr(op, "response", None) or getattr(op, "result", None)
+        generated = getattr(result, "generated_videos", None) or []
+        if not generated:
+            return {"done": True, "status": "FAILED", "error": "no video generated"}
+        video = generated[0].video
+        gcs_uri = getattr(video, "uri", None)
+        if not gcs_uri and getattr(video, "video_bytes", None):
+            obj = f"veo/{uuid.uuid4().hex}.mp4"
+            _upload_bytes(video.video_bytes, obj, "video/mp4")
+            gcs_uri = f"gs://{GCS_BUCKET}/{obj}"
+        return {"done": True, "status": "DONE", "gcs_uri": gcs_uri}
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"veo_status_error: {str(e)[:400]}")
+
+
+@app.get("/video/download")
+def video_download(gcs_uri: str, authorization: str = Header(default=None)):
+    _auth(authorization)
+    from fastapi.responses import StreamingResponse
+    from google.cloud import storage as gstorage
+    if not gcs_uri.startswith("gs://"):
+        raise HTTPException(status_code=400, detail="invalid gcs_uri")
+    _, _, path = gcs_uri.partition("gs://")
+    bucket_name, _, obj = path.partition("/")
+    blob = gstorage.Client(project=PROJECT).bucket(bucket_name).blob(obj)
+    if not blob.exists():
+        raise HTTPException(status_code=404, detail="not found")
+    return StreamingResponse(blob.open("rb"), media_type="video/mp4")
+
+
+def _upload_bytes(data, dest, content_type):
+    from google.cloud import storage as gstorage
+    blob = gstorage.Client(project=PROJECT).bucket(GCS_BUCKET).blob(dest)
+    blob.upload_from_string(data, content_type=content_type)
+    return f"gs://{GCS_BUCKET}/{dest}"

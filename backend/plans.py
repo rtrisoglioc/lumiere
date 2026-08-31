@@ -1,10 +1,14 @@
-"""Configurable plan catalog (PLACEHOLDERS — not final business decisions).
+"""Configurable plan catalog (defaults). Prices, limits, quotas and entitlements
+are placeholders — editable at runtime from the Admin panel (stored in DB via
+plans_store). No real payment processing is wired.
 
-Prices, limits and entitlements are placeholders meant to be edited freely.
-No real payment processing is wired.
+entitlements:
+  - video:  can invoke AI Video Generation (Vertex/Veo). ENFORCED in backend.
+  - social: can access the AI Social Content Studio. ENFORCED in backend.
+limits.ai_generations = monthly Veo video quota.
 """
 
-PLANS_VERSION = 1
+PLANS_VERSION = 3
 
 PLANS = [
     {
@@ -13,56 +17,62 @@ PLANS = [
         "recommended": False,
         "price": {"monthly": 0, "yearly": 0, "currency": "USD"},
         "tagline": {
-            "en": "Explore LUMIÈRE with limited Experiences and AI/media processing.",
-            "es": "Explora LUMIÈRE con Experiencias y procesamiento de IA/medios limitados.",
+            "en": "Planning and Detect Gap. Bilingual. No AI video generation.",
+            "es": "Planeación y Detect Gap. Bilingüe. Sin generación de video IA.",
         },
-        "limits": {"experiences": 2, "cuts": 5, "ai_generations": 1},
+        "limits": {"experiences": 2, "cuts": 5, "ai_generations": 0},
+        "entitlements": {"video": False, "social": False},
         "features": [
-            {"en": "Up to 2 Experiences", "es": "Hasta 2 Experiencias"},
-            {"en": "Story planning & shot missions", "es": "Planificación de historia y misiones de toma"},
-            {"en": "Gemini footage analysis", "es": "Análisis de material con Gemini"},
-            {"en": "1 real rendered cut", "es": "1 corte real renderizado"},
+            {"en": "Story planning & shot missions", "es": "Planeación de historia y misiones"},
+            {"en": "Detect Gap coverage", "es": "Cobertura Detect Gap"},
+            {"en": "Bilingual ES/EN", "es": "Bilingüe ES/EN"},
+            {"en": "No AI video generation", "es": "Sin generación de video IA"},
         ],
     },
     {
         "id": "creator",
         "name": "LUMIÈRE CREATOR",
         "recommended": True,
-        "price": {"monthly": 24, "yearly": 228, "currency": "USD"},
+        "price": {"monthly": 49, "yearly": 468, "currency": "USD"},
         "tagline": {
-            "en": "For creators producing cinematic travel and lifestyle stories regularly.",
-            "es": "Para creadores que producen historias cinematográficas de viaje y lifestyle con frecuencia.",
+            "en": "Real AI video with Vertex Veo, limited monthly quota.",
+            "es": "Video IA real con Vertex Veo, cuota mensual limitada.",
         },
-        "limits": {"experiences": 25, "cuts": 200, "ai_generations": 50},
+        "limits": {"experiences": 25, "cuts": 200, "ai_generations": 20},
+        "entitlements": {"video": True, "social": False},
         "features": [
-            {"en": "25 Experiences", "es": "25 Experiencias"},
-            {"en": "Higher media limits", "es": "Límites de medios más altos"},
-            {"en": "Advanced cuts & conversational re-editing", "es": "Cortes avanzados y re-edición conversacional"},
-            {"en": "Visual DNA", "es": "Visual DNA"},
-            {"en": "Priority AI processing", "es": "Procesamiento de IA prioritario"},
+            {"en": "Everything in Free", "es": "Todo lo de Free"},
+            {"en": "AI Video Generation (Veo)", "es": "Generación de Video IA (Veo)"},
+            {"en": "20 clips / month", "es": "20 clips / mes"},
+            {"en": "Priority rendering", "es": "Renderizado prioritario"},
         ],
     },
     {
-        "id": "pro",
-        "name": "LUMIÈRE PRO",
+        "id": "studio",
+        "name": "LUMIÈRE STUDIO",
         "recommended": False,
-        "price": {"monthly": 59, "yearly": 564, "currency": "USD"},
+        "price": {"monthly": 149, "yearly": 1428, "currency": "USD"},
         "tagline": {
-            "en": "For professional creators and future brand/hospitality collaboration.",
-            "es": "Para creadores profesionales y futura colaboración con marcas/hospitalidad.",
+            "en": "Expanded video quota + full AI Social Content Studio.",
+            "es": "Cuota de video ampliada + AI Social Content Studio completo.",
         },
-        "limits": {"experiences": 1000, "cuts": 5000, "ai_generations": 1000},
+        "limits": {"experiences": 1000, "cuts": 5000, "ai_generations": 100},
+        "entitlements": {"video": True, "social": True},
         "features": [
-            {"en": "Unlimited-scale Experiences", "es": "Experiencias a escala ilimitada"},
-            {"en": "Advanced Visual DNA", "es": "Visual DNA avanzado"},
-            {"en": "Experience Intelligence", "es": "Experience Intelligence"},
-            {"en": "Future Brand DNA capabilities", "es": "Futuras capacidades de Brand DNA"},
-            {"en": "Highest media & AI limits", "es": "Los límites más altos de medios e IA"},
+            {"en": "Everything in Creator", "es": "Todo lo de Creator"},
+            {"en": "Expanded video quota", "es": "Cuota de video ampliada"},
+            {"en": "AI Social Content Studio", "es": "AI Social Content Studio"},
+            {"en": "Auto post plan + scheduling", "es": "Plan de posts + programación"},
         ],
     },
 ]
 
 FAQ = [
+    {
+        "q": {"en": "How do the agents make decisions?", "es": "¿Cómo toman decisiones los agentes?"},
+        "a": {"en": "Every stage runs on Google Gemini via Vertex AI with full traceability.",
+              "es": "Cada etapa corre en Google Gemini vía Vertex AI con trazabilidad total."},
+    },
     {
         "q": {"en": "Is my footage private?", "es": "¿Mi material es privado?"},
         "a": {"en": "Yes. Experiences are private by default and originals are never modified.",
@@ -72,11 +82,6 @@ FAQ = [
         "q": {"en": "Can I change plans anytime?", "es": "¿Puedo cambiar de plan cuando quiera?"},
         "a": {"en": "Yes, upgrade or downgrade at any time. Placeholder billing for now.",
               "es": "Sí, mejora o baja de plan cuando quieras. Facturación de placeholder por ahora."},
-    },
-    {
-        "q": {"en": "What makes LUMIÈRE different?", "es": "¿Qué hace diferente a LUMIÈRE?"},
-        "a": {"en": "Other AI tools edit what you captured. LUMIÈRE helps you understand what to capture next.",
-              "es": "Otras herramientas de IA editan lo que capturaste. LUMIÈRE te ayuda a entender qué capturar después."},
     },
 ]
 

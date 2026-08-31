@@ -48,22 +48,34 @@ def main():
         "GOOGLE_CLOUD_PROJECT": PROJECT,
         "GOOGLE_CLOUD_LOCATION": LOCATION,
         "GCS_BUCKET": MEDIA,
+        # Parallel Search mode: valid values are turbo|basic|advanced (NOT "base").
+        "PARALLEL_MODE": os.environ.get("PARALLEL_MODE") or "basic",
     }
     if os.environ.get("PARALLEL_API_KEY"):
         engine_env["PARALLEL_API_KEY"] = os.environ["PARALLEL_API_KEY"]
-    if os.environ.get("PARALLEL_MODE"):
-        engine_env["PARALLEL_MODE"] = os.environ["PARALLEL_MODE"]
 
-    print(f"Deploying LUMIÈRE orchestrator — project={PROJECT} location={LOCATION} staging={BUCKET}")
     vertexai.init(project=PROJECT, location=LOCATION, staging_bucket=BUCKET)
     app = agent_engines.AdkApp(agent=root_agent, enable_tracing=True)
-    remote = agent_engines.create(
-        agent_engine=app,
-        display_name="LUMIERE Cinema Orchestrator",
-        requirements=reqs,
-        extra_packages=["adk_app"],
-        env_vars=engine_env,
-    )
+
+    existing = (os.environ.get("VERTEX_AGENT_ENGINE_ID") or "").strip()
+    if existing:
+        print(f"Updating EXISTING engine in-place — {existing}")
+        remote = agent_engines.update(
+            resource_name=existing,
+            agent_engine=app,
+            requirements=reqs,
+            extra_packages=["adk_app"],
+            env_vars=engine_env,
+        )
+    else:
+        print(f"Creating NEW engine — project={PROJECT} location={LOCATION} staging={BUCKET}")
+        remote = agent_engines.create(
+            agent_engine=app,
+            display_name="LUMIERE Cinema Orchestrator",
+            requirements=reqs,
+            extra_packages=["adk_app"],
+            env_vars=engine_env,
+        )
     name = getattr(remote, "resource_name", None) or remote.gca_resource.name
     print("\n=== DEPLOYED ===")
     print("REASONING_ENGINE_NAME =", name)

@@ -1,53 +1,64 @@
-"""Vertex AI (Veo) video generation/enhancement adapter.
+"""Vertex AI (Veo) video generation via the Cloud Run gateway.
 
-MODULAR BOUNDARY. In production this calls Google Cloud Vertex AI (Veo) to
-generate video from a prompt and to AI-enhance/edit the user's own videos. That
-runtime is provisioned in the user's GCP project (billing + service account +
-Vertex AI API). It is NOT connected in this environment.
+Emergent has NO Google credentials. All Veo calls go through the keyless-ADC
+Cloud Run gateway (LUMIERE_GATEWAY_URL) exactly like /agent. Veo is long-running:
+submit() returns an operation_name, poll() checks it, download() streams the mp4.
+When the gateway is not configured this reports not_connected (no mock output)."""
+import os
+import requests
 
-Per the user's decision, the interface is ready but returns a clearly-marked
-"not_connected" mock. Swap `generate` / `enhance` bodies to call Vertex once GCP
-credentials are available — no domain/UI changes required.
-"""
-from db import now_iso
+GATEWAY_URL = (os.environ.get("LUMIERE_GATEWAY_URL") or "").strip().rstrip("/")
+GATEWAY_TOKEN = os.environ.get("LUMIERE_GATEWAY_TOKEN", "")
+VEO_MODEL = os.environ.get("VEO_MODEL", "veo-3.0-generate-001")
+
+
+def _headers():
+    return {"Authorization": f"Bearer {GATEWAY_TOKEN}", "Content-Type": "application/json"}
 
 
 class VertexVideoAdapter:
-    connected = False
     provider = "google_vertex_veo"
 
+    @property
+    def connected(self) -> bool:
+        return bool(GATEWAY_URL)
+
     def status(self) -> dict:
+        c = self.connected
         return {
-            "connected": self.connected,
+            "connected": c,
             "provider": self.provider,
-            "status": "not_connected",
-            "note_en": "Vertex AI (Veo) not connected — awaiting GCP project credentials. UI flow is ready.",
-            "note_es": "Vertex AI (Veo) sin conectar — esperando credenciales del proyecto GCP. El flujo de UI está listo.",
+            "model": VEO_MODEL,
+            "status": "connected" if c else "not_connected",
+            "note_en": ("Vertex AI (Veo) via Cloud Run gateway (keyless ADC)." if c
+                        else "Vertex AI (Veo) not connected — set LUMIERE_GATEWAY_URL."),
+            "note_es": ("Vertex AI (Veo) vía gateway de Cloud Run (ADC sin clave)." if c
+                        else "Vertex AI (Veo) sin conectar — define LUMIERE_GATEWAY_URL."),
         }
 
-    def generate(self, prompt: str, options: dict) -> dict:
-        return {
-            "ok": False,
-            "mock": True,
-            "status": "not_connected",
-            "prompt": prompt,
-            "options": options,
-            "message_en": "Veo generation will run here once Vertex AI is connected.",
-            "message_es": "La generación con Veo correrá aquí una vez conectado Vertex AI.",
-            "requested_at": now_iso(),
-        }
+    def submit(self, prompt: str, options: dict) -> dict:
+        if not self.connected:
+            return {"ok": False, "status": "not_connected"}
+        resp = requests.post(
+            f"{GATEWAY_URL}/video", headers=_headers(), timeout=(30, 120),
+            json={"prompt": prompt, "aspect_ratio": options.get("aspect_ratio", "16:9"),
+                  "duration_sec": options.get("duration_sec", 8)})
+        resp.raise_for_status()
+        return {"ok": True, **resp.json()}
 
-    def enhance(self, asset_ref: str, options: dict) -> dict:
-        return {
-            "ok": False,
-            "mock": True,
-            "status": "not_connected",
-            "asset": asset_ref,
-            "options": options,
-            "message_en": "AI enhancement will run on Vertex AI (Veo) once connected.",
-            "message_es": "La mejora con IA correrá en Vertex AI (Veo) una vez conectado.",
-            "requested_at": now_iso(),
-        }
+    def poll(self, operation_name: str) -> dict:
+        resp = requests.post(
+            f"{GATEWAY_URL}/video/status", headers=_headers(), timeout=(30, 120),
+            json={"operation_name": operation_name})
+        resp.raise_for_status()
+        return resp.json()
+
+    def download(self, gcs_uri: str):
+        resp = requests.get(
+            f"{GATEWAY_URL}/video/download", headers={"Authorization": f"Bearer {GATEWAY_TOKEN}"},
+            params={"gcs_uri": gcs_uri}, timeout=(30, 300))
+        resp.raise_for_status()
+        return resp.content
 
 
 vertex_video = VertexVideoAdapter()

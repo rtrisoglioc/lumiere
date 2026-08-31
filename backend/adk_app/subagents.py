@@ -30,7 +30,7 @@ def parallel_search(objective: str, queries: list) -> dict:
             "https://api.parallel.ai/v1/search",
             headers={"x-api-key": key, "Content-Type": "application/json"},
             json={"objective": objective, "search_queries": queries[:5],
-                  "mode": os.environ.get("PARALLEL_MODE", "base"), "max_chars_total": 40000},
+                  "mode": os.environ.get("PARALLEL_MODE") or "basic", "max_chars_total": 40000},
             timeout=45,
         )
         resp.raise_for_status()
@@ -39,6 +39,13 @@ def parallel_search(objective: str, queries: list) -> dict:
                     "excerpts": [str(e)[:600] for e in (r.get("excerpts") or [])][:3]}
                    for r in (data.get("results") or [])[:8]]
         return {"connected": True, "status": "ok", "objective": objective, "results": results}
+    except requests.HTTPError as e:
+        body = ""
+        try:
+            body = e.response.text[:300]
+        except Exception:
+            pass
+        return {"connected": True, "status": "error", "error": f"{str(e)[:200]} :: {body}", "results": []}
     except Exception as e:
         return {"connected": True, "status": "error", "error": str(e)[:300], "results": []}
 

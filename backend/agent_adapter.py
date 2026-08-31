@@ -124,21 +124,109 @@ class AgentBuilderAdapter:
             f = files[0]
             with open(f["path"], "rb") as fh:
                 resp = requests.post(
-                    f"{GATEWAY_URL}/vision", headers=headers, timeout=180,
-                    data={"operation": operation, "session_id": session_id or "",
+                    f"{GATEWAY_URL}/vision", headers=headers, timeout=(30, 600),
+                    data={"operation": operation, "session_id": "",
                           "payload": json.dumps({"system": system, "prompt": prompt})},
                     files={"file": (os.path.basename(f["path"]), fh, f["mime"])},
                 )
         else:
             resp = requests.post(
                 f"{GATEWAY_URL}/agent", headers={**headers, "Content-Type": "application/json"},
-                timeout=120, json={"operation": operation, "session_id": session_id or "",
-                                   "payload": {"system": system, "prompt": prompt}})
+                timeout=(30, 300), json={"operation": operation, "session_id": None,
+                                         "user_id": "lumiere",
+                                         "payload": {"system": system, "prompt": prompt}})
         resp.raise_for_status()
         data = resp.json()
         result = data.get("result")
-        raw = result if isinstance(result, str) else json.dumps(result)
+        if isinstance(result, dict) and "events" in result:
+            raw = _best_json_from_events(result["events"]) or json.dumps(result)
+        else:
+            raw = result if isinstance(result, str) else json.dumps(result)
         return raw, data.get("model", "agent-engine")
+
+
+def gateway_context(objective, queries, session_id=None):
+    """Run the ADK CONTEXT sub-agent via the Cloud Run gateway. The Agent Engine
+    executes the parallel_search tool using ITS OWN PARALLEL_API_KEY (no Parallel
+    key needed on Emergent). Returns a context dict compatible with agents._context_text."""
+    import requests
+    started = time.time()
+    system = ("You are CONTEXT. Call the parallel_search tool with the provided objective and queries, "
+              "then summarize the real evidence into a compact bilingual context brief.")
+    prompt = (f"objective={objective!r}\nqueries={json.dumps(queries)}\n"
+              "Call parallel_search(objective=objective, queries=queries) now, then return the brief.")
+    resp = requests.post(
+        f"{GATEWAY_URL}/agent",
+        headers={"Authorization": f"Bearer {GATEWAY_TOKEN}", "Content-Type": "application/json"},
+        timeout=(30, 300),
+        json={"operation": "context", "session_id": None, "user_id": "lumiere",
+              "payload": {"system": system, "prompt": prompt, "objective": objective, "queries": queries}})
+    resp.raise_for_status()
+    data = resp.json()
+    result = data.get("result") or {}
+    events = result.get("events") if isinstance(result, dict) else []
+    parsed = _parse_context_events(events or [])
+    parsed["objective"] = objective
+    parsed["queries"] = queries
+    parsed["latency_ms"] = int((time.time() - started) * 1000)
+    return parsed
+
+
+def _parse_context_events(events):
+    """Extract the parallel_search tool response (real sources) from ADK events."""
+    sources, tool_status = [], None
+    for ev in events:
+        if not isinstance(ev, dict):
+            continue
+        content = ev.get("content")
+        parts = content.get("parts") if isinstance(content, dict) else None
+        if not isinstance(parts, list):
+            continue
+        for p in parts:
+            if not isinstance(p, dict):
+                continue
+            fr = p.get("function_response") or p.get("functionResponse")
+            if not isinstance(fr, dict) or fr.get("name") != "parallel_search":
+                continue
+            r = fr.get("response") or {}
+            if "results" not in r and isinstance(r.get("result"), dict):
+                r = r["result"]
+            tool_status = r.get("status") or tool_status
+            for it in (r.get("results") or [])[:8]:
+                if isinstance(it, dict):
+                    sources.append({"title": it.get("title"), "url": it.get("url"),
+                                    "excerpts": it.get("excerpts") or []})
+    ok = bool(sources) and tool_status == "ok"
+    return {"ok": ok, "connected": True,
+            "status": tool_status or ("ok" if sources else "not_connected"),
+            "results": sources, "brief_raw": _best_json_from_events(events)}
+
+
+def _event_texts(events):
+    out = []
+    for ev in events or []:
+        if not isinstance(ev, dict):
+            continue
+        content = ev.get("content")
+        parts = content.get("parts") if isinstance(content, dict) else None
+        if not isinstance(parts, list):
+            continue
+        texts = [p.get("text") for p in parts if isinstance(p, dict) and p.get("text")]
+        if texts:
+            out.append("\n".join(texts))
+    return out
+
+
+def _best_json_from_events(events):
+    """Pick the event text that parses to a valid JSON object (final complete
+    event preferred), tolerating streaming partials/transfer events."""
+    texts = _event_texts(events)
+    candidates = list(reversed(texts)) + ["".join(texts)]
+    for c in candidates:
+        parsed = _extract_json(c)
+        if isinstance(parsed, dict) and not parsed.get("_parse_error"):
+            return c
+    return (texts[-1] if texts else "")
 
 
 def _extract_json(text):

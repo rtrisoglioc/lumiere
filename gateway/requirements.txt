@@ -1,5 +1,6 @@
 google-cloud-aiplatform[agent_engines]==1.148.1
 google-cloud-storage
+google-genai
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 python-multipart==0.0.20

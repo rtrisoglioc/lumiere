@@ -20,8 +20,10 @@ export function Header({ dark = false, back = false }) {
   const nav = [
     { label: t("home"), to: "/studio" },
     { label: t("createVideo"), to: "/create-video" },
+    { label: "Social", to: "/social" },
     { label: t("pricing"), to: "/pricing" },
   ];
+  if (user?.is_admin) nav.push({ label: "Admin", to: "/admin" });
 
   const initial = (user?.name || user?.email || "L").charAt(0).toUpperCase();
 
@@ -71,6 +73,10 @@ export function Header({ dark = false, back = false }) {
             <DropdownMenuItem data-testid="menu-account" onClick={() => navigate("/account")} className="cursor-pointer gap-2"><User size={15} /> {t("account")}</DropdownMenuItem>
             <DropdownMenuItem data-testid="menu-pricing" onClick={() => navigate("/pricing")} className="cursor-pointer gap-2"><CreditCard size={15} /> {t("managePlan")}</DropdownMenuItem>
             <DropdownMenuItem data-testid="menu-create-video" onClick={() => navigate("/create-video")} className="cursor-pointer gap-2"><Sparkles size={15} /> {t("createVideo")}</DropdownMenuItem>
+            <DropdownMenuItem data-testid="menu-social" onClick={() => navigate("/social")} className="cursor-pointer gap-2"><Sparkles size={15} /> Social Studio</DropdownMenuItem>
+            {user?.is_admin && (
+              <DropdownMenuItem data-testid="menu-admin" onClick={() => navigate("/admin")} className="cursor-pointer gap-2"><User size={15} /> Admin</DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem data-testid="menu-signout" onClick={logout} className="cursor-pointer gap-2 text-red-600"><LogOut size={15} /> {t("signOut")}</DropdownMenuItem>
           </DropdownMenuContent>

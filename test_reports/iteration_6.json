@@ -1,0 +1,25 @@
+{
+  "summary": "Iteration 6 (LIVE gateway validation): 5/5 pytest tests passed. Real Vertex AI Agent Engine plan flow via Cloud Run gateway is fully connected. POST /api/experiences + POST /api/experiences/{id}/plan returned HTTP 200 in 31.8s with a bilingual title (en+es), 6 beats, and 8 missions. Trace provenance confirms director (14344ms) and cinematographer (17320ms) both ran on service='vertex-agent-engine', status='ok', model='agent-engine'; context ran on service='parallel' with status='not_connected' (Parallel key not set — expected). Regression health (agent, partner, auth/me) all 200.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_live_gateway_plan.py",
+    "/app/test_reports/pytest/iteration_6.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "agent_adapter._gateway sends session_id=None so the engine creates a fresh session per call — good for correctness but adds session-create round-trip latency; consider caching a per-user session_id (see gateway response.session_id) to reduce plan latency below ~30s if desired.",
+    "Director+cinematographer are called sequentially (~14s + ~17s = ~31s). Since they are independent given the same intent, running them in parallel via asyncio.gather could halve plan latency.",
+    "test_live_gateway_plan.py fixture uses instance-method class scope; PytestRemovedIn10Warning — cosmetic, migrate to @classmethod before pytest 10."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_live_gateway_plan.py"
+  ],
+  "success_rate": {"backend": "100% (5/5)", "frontend": "not tested (out of scope)"},
+  "test_credentials": "Bearer e2e_1788105676 (verified via /api/auth/me).",
+  "seed_data_creation": "One ephemeral experience 'TEST_LUMIERE live-gateway' (Barcelona, 2 days) created in mongo; planned via LIVE Vertex Agent Engine. Left in DB with TEST_ prefix.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "LIVE gateway is stable. Plan takes ~30s (director ~14s + cinematographer ~17s sequential); use timeout>=90s. Response shape: {plan:{title:{en,es}, beats:[...], missions:[...]}}. agent-runs shape: dict keyed by agent name ('context'|'director'|'cinematographer') with fields service/status/model/latency_ms. Parallel is intentionally not_connected (no PARALLEL_API_KEY).",
+  "rca of the issue": "N/A — no failures. Prior 'AgentEngine has no attribute query' + 'session_id must match ^[A-Za-z0-9_-]+$' issues are resolved: gateway/_query() uses create_session/get_session+stream_query and adapter sends session_id=None so the engine mints a valid one. Confirmed live: 2 agent-runs on service='vertex-agent-engine' with status='ok' and positive latency_ms."
+}

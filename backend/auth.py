@@ -1,13 +1,23 @@
-"""Emergent-managed Google Auth."""
+"""Emergent-managed Google Auth + email-based admin role."""
+import os
 import uuid
 from datetime import datetime, timezone, timedelta
 import requests
-from fastapi import Header, Cookie, HTTPException
+from fastapi import Header, Cookie, HTTPException, Depends
 
 from db import db
 
 SESSION_DATA_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
 SESSION_DAYS = 7
+
+
+def _admin_emails() -> set:
+    raw = os.environ.get("ADMIN_EMAILS", "")
+    return {e.strip().lower() for e in raw.split(",") if e.strip()}
+
+
+def is_admin_email(email: str) -> bool:
+    return bool(email) and email.strip().lower() in _admin_emails()
 
 
 async def exchange_session(session_id: str) -> dict:
@@ -70,6 +80,13 @@ async def get_current_user(
     user = await db.users.find_one({"user_id": session["user_id"]}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    user["is_admin"] = is_admin_email(user.get("email"))
+    return user
+
+
+async def require_admin(user: dict = Depends(get_current_user)) -> dict:
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin only")
     return user
 
 
