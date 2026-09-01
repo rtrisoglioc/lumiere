@@ -4,11 +4,12 @@ import { toast } from "sonner";
 import { api, API, getToken } from "@/lib/api";
 
 const POSITIONS = [["top", "Top"], ["center", "Center"], ["bottom", "Bottom"]];
-const COLORS = ["#FFFFFF", "#111111", "#D6A85F", "#7267A8", "#E5C07B"];
+const COLORS = ["#FFFFFF", "#FFD400", "#111111", "#D6A85F", "#7267A8", "#C81E1E"];
 
 export function SocialImageEditor({ post, lang, onDone, onClose }) {
   const [logo, setLogo] = useState({ enabled: false, x: 0.95, y: 0.95, scale: 0.2, opacity: 0.95 });
-  const [text, setText] = useState({ enabled: false, content: "", position: "bottom", color: "#FFFFFF", size: 0.08 });
+  const [headline, setHeadline] = useState({ enabled: false, content: "", position: "top", color: "#FFD400", size: 0.09 });
+  const [subline, setSubline] = useState({ enabled: false, content: "", position: "bottom", color: "#FFFFFF", size: 0.055 });
   const [hasLogo, setHasLogo] = useState(false);
   const [busy, setBusy] = useState(false);
   const [logoBust, setLogoBust] = useState(Date.now());
@@ -18,7 +19,9 @@ export function SocialImageEditor({ post, lang, onDone, onClose }) {
     api.get("/me/preferences").then((r) => setHasLogo(r.data.has_logo)).catch(() => {});
     const o = post.overlay_opts || {};
     if (o.logo) setLogo((l) => ({ ...l, ...o.logo }));
-    if (o.text) setText((t) => ({ ...t, ...o.text }));
+    const ts = o.texts || (o.text ? [o.text] : []);
+    if (ts[0]) setHeadline((h) => ({ ...h, ...ts[0], enabled: true }));
+    if (ts[1]) setSubline((s) => ({ ...s, ...ts[1], enabled: true }));
   }, []);
 
   const imgUrl = `${API}/social/posts/${post.id}/image?ts=${logoBust}`;
@@ -34,20 +37,21 @@ export function SocialImageEditor({ post, lang, onDone, onClose }) {
   const apply = async () => {
     setBusy(true);
     try {
-      await api.post(`/social/posts/${post.id}/overlay`, { logo, text }, { timeout: 60000 });
+      const texts = [headline, subline].filter((t) => t.enabled && t.content.trim());
+      await api.post(`/social/posts/${post.id}/overlay`, { logo, texts }, { timeout: 60000 });
       toast.success(lang === "es" ? "Diseño actualizado" : "Design updated");
       onDone?.(); onClose?.();
     } catch (e) { toast.error(e?.response?.data?.detail || (lang === "es" ? "Falló" : "Failed")); }
     finally { setBusy(false); }
   };
 
-  const textStyle = {
-    position: "absolute", left: 0, right: 0, textAlign: "center", color: text.color,
-    fontWeight: 800, padding: "0 6%", pointerEvents: "none", lineHeight: 1.1,
-    fontSize: `clamp(14px, ${text.size * 100}px, 46px)`,
-    textShadow: "0 2px 4px rgba(0,0,0,0.8), 0 0 3px rgba(0,0,0,0.8)",
-    ...(text.position === "top" ? { top: "6%" } : text.position === "center" ? { top: "50%", transform: "translateY(-50%)" } : { bottom: "6%" }),
-  };
+  const layerStyle = (t) => ({
+    position: "absolute", left: 0, right: 0, textAlign: "center", color: t.color,
+    fontWeight: 800, padding: "0 6%", pointerEvents: "none", lineHeight: 1.05,
+    fontSize: `clamp(14px, ${t.size * 100}px, 52px)`,
+    textShadow: "0 2px 5px rgba(0,0,0,0.85), 0 0 3px rgba(0,0,0,0.85)",
+    ...(t.position === "top" ? { top: "5%" } : t.position === "center" ? { top: "50%", transform: "translateY(-50%)" } : { bottom: "5%" }),
+  });
 
   return (
     <div className="fixed inset-0 z-[70] bg-black/70 flex items-center justify-center p-4" onClick={() => !busy && onClose?.()}>
@@ -63,29 +67,13 @@ export function SocialImageEditor({ post, lang, onDone, onClose }) {
               {logo.enabled && hasLogo && (
                 <img src={logoUrl} alt="" style={{ position: "absolute", width: `${logo.scale * 100}%`, opacity: logo.opacity, left: `calc((100% - ${logo.scale * 100}%) * ${logo.x})`, top: `calc((100% - ${logo.scale * 100}%) * ${logo.y})`, pointerEvents: "none" }} />
               )}
-              {text.enabled && text.content && <div style={textStyle}>{text.content}</div>}
+              {[headline, subline].map((t, i) => t.enabled && t.content && <div key={i} style={layerStyle(t)}>{t.content}</div>)}
             </div>
           </div>
           <div className="space-y-5">
-            {/* text */}
-            <div>
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/50 flex items-center gap-1"><Type size={12} /> {lang === "es" ? "Texto" : "Text"}</span>
-                <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={text.enabled} data-testid="social-text-toggle" onChange={(e) => setText({ ...text, enabled: e.target.checked })} /><span className="text-xs">{lang === "es" ? "Mostrar" : "Show"}</span></label>
-              </div>
-              {text.enabled && (
-                <div className="mt-2 space-y-2">
-                  <input value={text.content} onChange={(e) => setText({ ...text, content: e.target.value })} data-testid="social-text-content"
-                    placeholder={lang === "es" ? "Titular sobre la imagen" : "Headline over the image"}
-                    className="w-full bg-white border border-lumiere-ink/15 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-lumiere-iris" />
-                  <div className="flex flex-wrap gap-1.5">{POSITIONS.map(([v, l]) => <Pill key={v} active={text.position === v} onClick={() => setText({ ...text, position: v })} testid={`social-text-pos-${v}`}>{l}</Pill>)}</div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-[0.55rem] uppercase tracking-widest text-lumiere-ink/40">{lang === "es" ? "Color" : "Color"}</span>
-                    {COLORS.map((c) => <button key={c} data-testid={`social-text-color-${c}`} onClick={() => setText({ ...text, color: c })} className={`h-6 w-6 rounded-full border-2 ${text.color === c ? "border-lumiere-iris" : "border-lumiere-ink/15"}`} style={{ background: c }} />)}
-                  </div>
-                  <Slider label={`${lang === "es" ? "Tamaño" : "Size"} ${Math.round(text.size * 100)}`} min={3} max={16} value={text.size * 100} onChange={(v) => setText({ ...text, size: v / 100 })} testid="social-text-size" />
-                </div>
-              )}
+            {/* text layers */}
+            <Layer label={lang === "es" ? "Titular (arriba)" : "Headline (top)"} val={headline} set={setHeadline} lang={lang} idp="headline" />
+            <Layer label={lang === "es" ? "Subtítulo (abajo)" : "Subline (bottom)"} val={subline} set={setSubline} lang={lang} idp="subline" />
             </div>
             {/* logo */}
             <div className="border-t border-lumiere-ink/10 pt-4">
@@ -124,4 +112,26 @@ const Pill = ({ active, onClick, children, testid }) => (
 const Slider = ({ label, min, max, value, onChange, testid }) => (
   <div><span className="font-mono text-[0.55rem] uppercase tracking-widest text-lumiere-ink/40">{label}</span>
     <input type="range" min={min} max={max} value={value} data-testid={testid} onChange={(e) => onChange(Number(e.target.value))} className="w-full accent-lumiere-iris" /></div>
+);
+
+const Layer = ({ label, val, set, lang, idp }) => (
+  <div className="border-t border-lumiere-ink/10 pt-3 first:border-t-0 first:pt-0">
+    <div className="flex items-center justify-between">
+      <span className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/50 flex items-center gap-1"><Type size={12} /> {label}</span>
+      <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={val.enabled} data-testid={`social-${idp}-toggle`} onChange={(e) => set({ ...val, enabled: e.target.checked })} /><span className="text-xs">{lang === "es" ? "Mostrar" : "Show"}</span></label>
+    </div>
+    {val.enabled && (
+      <div className="mt-2 space-y-2">
+        <input value={val.content} onChange={(e) => set({ ...val, content: e.target.value })} data-testid={`social-${idp}-content`}
+          placeholder={lang === "es" ? "Escribe el texto…" : "Type your text…"}
+          className="w-full bg-white border border-lumiere-ink/15 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-lumiere-iris" />
+        <div className="flex flex-wrap gap-1.5">{POSITIONS.map(([v, l]) => <Pill key={v} active={val.position === v} onClick={() => set({ ...val, position: v })} testid={`social-${idp}-pos-${v}`}>{l}</Pill>)}</div>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[0.55rem] uppercase tracking-widest text-lumiere-ink/40">{lang === "es" ? "Color" : "Color"}</span>
+          {COLORS.map((c) => <button key={c} data-testid={`social-${idp}-color-${c}`} onClick={() => set({ ...val, color: c })} className={`h-6 w-6 rounded-full border-2 ${val.color === c ? "border-lumiere-iris" : "border-lumiere-ink/15"}`} style={{ background: c }} />)}
+        </div>
+        <Slider label={`${lang === "es" ? "Tamaño" : "Size"} ${Math.round(val.size * 100)}`} min={3} max={18} value={val.size * 100} onChange={(v) => set({ ...val, size: v / 100 })} testid={`social-${idp}-size`} />
+      </div>
+    )}
+  </div>
 );

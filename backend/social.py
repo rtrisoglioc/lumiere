@@ -13,7 +13,7 @@ import uuid
 import base64
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, UploadFile, File
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -151,14 +151,14 @@ async def make_plan(body: PlanIn, user: dict = Depends(require_social)):
               'bilingual objects {"en":"...","es":"..."} with natural, native-level English AND Spanish. '
               "Captions must be EXTENSIVE and engaging: a scroll-stopping hook line, then 2-4 short paragraphs of "
               "story/value separated by \\n\\n line breaks, then a clear call-to-action, and 1-3 tasteful emojis "
-              "used sparingly. Aim for 90-160 words per caption.")
+              "used sparingly. Aim for 150-230 words per caption.")
     prompt = (
         f"Creator ideas/brief: {body.brief!r}. Desired tone: {tone}.\n"
         f"Brand context for the visuals: {brand_line}\n"
         f"Visual style REQUIRED for every design_prompt: {style_line}\n"
         f"Produce a JSON object: {{\"plan\": {{\"summary\": bilingual, \"strategy\": bilingual}}, "
         f"\"posts\": array of exactly {n} objects {{\"title\": bilingual short, \"caption\": bilingual "
-        "EXTENSIVE (90-160 words, hook + \\n\\n paragraphs + CTA, sparing emojis), "
+        "EXTENSIVE (150-230 words, hook + \\n\\n paragraphs + CTA, sparing emojis), "
         "\"hashtags\": array of 6-10 relevant strings (no # inside), "
         f"\"network\": one of {NETWORKS}, \"design_prompt\": a rich, detailed English image-generation prompt "
         "that FOLLOWS the required visual style above (describe the illustrated subject, layout, title area and "
@@ -271,6 +271,28 @@ async def get_design(post_id: str, user: dict = Depends(require_social)):
 class OverlayIn(BaseModel):
     logo: dict = None
     text: dict = None
+    texts: list = None
+
+
+@social_router.post("/posts/{post_id}/upload-image")
+async def upload_own_image(post_id: str, file: UploadFile = File(...), user: dict = Depends(require_social)):
+    """Use a real uploaded photo as the post image (instead of AI generation)."""
+    post = await _get_post(post_id, user)
+    data = await file.read()
+    if len(data) > 15 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="file_too_large")
+    try:
+        from PIL import Image, ImageFile
+        ImageFile.LOAD_TRUNCATED_IMAGES = True
+        import io as _io
+        img = Image.open(_io.BytesIO(data)).convert("RGB")
+        buf = _io.BytesIO(); img.save(buf, format="PNG"); png = buf.getvalue()
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid_image")
+    path = f"{storage.APP_NAME}/social/{user['user_id']}/{post_id}_upload.png"
+    put = await __import__("asyncio").to_thread(storage.put_object, path, png, "image/png")
+    await db.social_posts.update_one({"id": post_id}, {"$set": {"image_path": put["path"]}, "$unset": {"overlay_path": ""}})
+    return {"ok": True, "image_url": f"/api/social/posts/{post_id}/image"}
 
 
 @social_router.post("/posts/{post_id}/overlay")
@@ -282,8 +304,9 @@ async def overlay_design(post_id: str, body: OverlayIn, user: dict = Depends(req
     if not post.get("image_path"):
         raise HTTPException(status_code=400, detail="no_base_image")
     logo = body.logo or {}
-    text = body.text or {}
-    if not (logo.get("enabled") or (text.get("enabled") and (text.get("content") or "").strip())):
+    texts = body.texts if body.texts is not None else ([body.text] if body.text else [])
+    texts = [t for t in texts if t and (t.get("content") or "").strip()]
+    if not (logo.get("enabled") or texts):
         # clear overlay -> revert to original
         await db.social_posts.update_one({"id": post_id}, {"$unset": {"overlay_path": ""}})
         return {"ok": True, "cleared": True, "image_url": f"/api/social/posts/{post_id}/image"}
@@ -297,10 +320,10 @@ async def overlay_design(post_id: str, body: OverlayIn, user: dict = Depends(req
             logo_bytes = (await asyncio.to_thread(storage.get_object, lp))[0]
         else:
             logo["enabled"] = False
-    out = await asyncio.to_thread(image_overlay.apply_overlay, base_bytes, logo_bytes, logo, text)
+    out = await asyncio.to_thread(image_overlay.apply_overlay, base_bytes, logo_bytes, logo, None, texts)
     path = f"{storage.APP_NAME}/social/{user['user_id']}/{post_id}_overlay.png"
     put = await asyncio.to_thread(storage.put_object, path, out, "image/png")
-    await db.social_posts.update_one({"id": post_id}, {"$set": {"overlay_path": put["path"], "overlay_opts": {"logo": logo, "text": text}}})
+    await db.social_posts.update_one({"id": post_id}, {"$set": {"overlay_path": put["path"], "overlay_opts": {"logo": logo, "texts": texts}}})
     return {"ok": True, "image_url": f"/api/social/posts/{post_id}/image"}
 
 

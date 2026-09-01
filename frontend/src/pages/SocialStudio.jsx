@@ -107,6 +107,14 @@ export default function SocialStudio() {
     catch { toast.error("Design failed"); } finally { setW(id, null); }
   };
 
+  const uploadPhoto = async (id, file) => {
+    if (!file) return;
+    setW(id, "upload");
+    const fd = new FormData(); fd.append("file", file);
+    try { await api.post(`/social/posts/${id}/upload-image`, fd, { headers: { "Content-Type": "multipart/form-data" } }); await loadPosts(); toast.success(lang === "es" ? "Foto subida" : "Photo uploaded"); }
+    catch { toast.error(lang === "es" ? "Falló la subida" : "Upload failed"); } finally { setW(id, null); }
+  };
+
   const updatePost = async (id, patch) => {
     setPosts((ps) => ps.map((p) => (p.id === id ? { ...p, ...patch } : p)));
     try { await api.put(`/social/posts/${id}`, patch); } catch { /* */ }
@@ -261,14 +269,27 @@ export default function SocialStudio() {
                             <img src={imgUrl(p.id)} alt="" className="w-full h-full object-cover" data-testid={`social-image-${p.id}`} />
                             <button data-testid={`social-brand-${p.id}`} onClick={() => setEditing(p)}
                               className="absolute bottom-2 left-2 inline-flex items-center gap-1.5 bg-lumiere-warm/90 border border-lumiere-ink/15 text-lumiere-ink px-3 py-1.5 rounded-full font-mono text-[0.55rem] uppercase tracking-widest hover:border-lumiere-iris transition-colors">
-                              <Palette size={12} /> {lang === "es" ? "Diseño" : "Design"}
+                              <Palette size={12} /> {lang === "es" ? "Texto + Logo" : "Text + Logo"}
                             </button>
+                            <label data-testid={`social-replace-${p.id}`} className="absolute bottom-2 right-2 inline-flex items-center gap-1.5 bg-lumiere-warm/90 border border-lumiere-ink/15 text-lumiere-ink px-3 py-1.5 rounded-full font-mono text-[0.55rem] uppercase tracking-widest hover:border-lumiere-iris transition-colors cursor-pointer">
+                              <Upload size={12} /> {lang === "es" ? "Cambiar foto" : "Replace"}
+                              <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(p.id, e.target.files?.[0])} />
+                            </label>
                           </>
                         ) : (
-                          <button data-testid={`social-design-${p.id}`} onClick={() => genDesign(p.id)} disabled={working[p.id] === "design"}
-                            className="inline-flex items-center gap-2 bg-lumiere-iris/10 border border-lumiere-iris/40 text-lumiere-iris px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest hover:bg-lumiere-iris/20 transition-colors">
-                            {working[p.id] === "design" ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />} {g(T.design, lang)}
-                          </button>
+                          <div className="flex flex-col items-center gap-2 p-4">
+                            <div className="flex gap-2">
+                              <button data-testid={`social-design-${p.id}`} onClick={() => genDesign(p.id)} disabled={!!working[p.id]}
+                                className="inline-flex items-center gap-2 bg-lumiere-iris/10 border border-lumiere-iris/40 text-lumiere-iris px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest hover:bg-lumiere-iris/20 transition-colors">
+                                {working[p.id] === "design" ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />} {g(T.design, lang)}
+                              </button>
+                              <label data-testid={`social-upload-${p.id}`} className="inline-flex items-center gap-2 border border-lumiere-ink/20 text-lumiere-ink/70 px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest hover:border-lumiere-iris transition-colors cursor-pointer">
+                                {working[p.id] === "upload" ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} {lang === "es" ? "Subir foto" : "Upload photo"}
+                                <input type="file" accept="image/*" className="hidden" onChange={(e) => uploadPhoto(p.id, e.target.files?.[0])} />
+                              </label>
+                            </div>
+                            <span className="font-mono text-[0.55rem] uppercase tracking-widest text-lumiere-ink/40">{lang === "es" ? "o publica solo el copy" : "or post copy only"}</span>
+                          </div>
                         )}
                         <span className={`absolute top-2 right-2 font-mono text-[0.55rem] uppercase tracking-widest border rounded-full px-2 py-0.5 bg-lumiere-warm ${STATUS_COLOR[p.status] || ""}`}>{p.status}</span>
                       </div>

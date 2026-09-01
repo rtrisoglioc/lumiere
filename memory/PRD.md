@@ -261,3 +261,13 @@ LUMIÈRE turns real lived experiences into cinema through an agentic closed loop
 ### Hardening
 - `ffmpeg_worker._run`/`video_editor._run`/`inserts._run` now catch FileNotFoundError/timeout and return a structured failure (a transient `ffprobe` FileNotFoundError during hot-reload previously surfaced as a 500).
 
+---
+
+## OWN-PHOTO UPLOAD + CRISP TEXT OVERLAY + COPY-ONLY + LONGER COPY — 2026-06
+
+- User: AI images inconsistent/ugly for reference-style posts (crisp headline typography). Answer: the reliable path is HYBRID — image (AI OR uploaded) + crisp text WE render (not the AI). Proven: uploaded a photo → sharp yellow 2-line headline (top) + subline (bottom) exactly like the reference.
+- `social.py`: `POST /posts/{id}/upload-image` (multipart, re-encoded to PNG) lets users use a real event photo instead of AI. Copy-only already works (image optional). `OverlayIn.texts` list; captions/copy length raised to 150–230 words.
+- `image_overlay.apply_overlay`: now accepts a `texts` list of layers, each auto-fit-to-width, wrapped, positioned top/center/bottom with strong outline (headline + subline). Backward compatible with single `text`.
+- Frontend: `SocialStudio` adds "Upload photo"/"Replace" (data-testid social-upload-<id>/social-replace-<id>) + "post copy only" hint; the overlay editor button relabelled "Texto + Logo". `SocialImageEditor` now has Headline (top) + Subline (bottom) layers (social-headline-* / social-subline-*), each with position/color/size, sending a `texts` array.
+- Verified via curl + rendered PNG: upload photo + headline/subline overlay produces pixel-crisp typography.
+
