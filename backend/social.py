@@ -46,6 +46,7 @@ class BrandIn(BaseModel):
     auto_logo: bool = None
     image_style: str = None
     website: str = None
+    image_engine: str = None
 
 
 STYLE_PRESETS = {
@@ -206,23 +207,34 @@ async def _get_post(post_id: str, user: dict) -> dict:
 
 
 @social_router.post("/posts/{post_id}/design")
-async def generate_design(post_id: str, user: dict = Depends(require_social)):
+async def generate_design(post_id: str, engine: str = None, user: dict = Depends(require_social)):
     from emergentintegrations.llm.chat import LlmChat, UserMessage
     import asyncio
+    import fal_images
     post = await _get_post(post_id, user)
     brand = await _get_brand(user["user_id"])
     base_prompt = (post.get("design_prompt") or "Educational post about the brand's core value")
-    prompt = f"{_style_directive(brand)}\nTOPIC/SUBJECT: {base_prompt}.\n{_brand_directives(brand)}"
-    chat = LlmChat(api_key=EMERGENT_KEY, session_id=f"social-img:{post_id}:{uuid.uuid4().hex[:6]}",
-                   system_message=("You generate premium BRANDED MARKETING GRAPHICS (flat/3D illustrations and "
-                                   "infographics). Never output photorealistic photographs of real people unless the "
-                                   "style explicitly says 'photo'. Keep composition clean with space for text."))
-    chat.with_model("gemini", IMAGE_MODEL).with_params(modalities=["image", "text"])
-    _text, images = await chat.send_message_multimodal_response(
-        UserMessage(text=f"Create a striking, professional social media graphic (square, 1:1). {prompt}"))
-    if not images:
-        raise HTTPException(status_code=502, detail="No image generated")
-    img_bytes = base64.b64decode(images[0]["data"])
+    eng = engine or brand.get("image_engine") or "recraft"
+    palette = [c for c in (brand.get("colors") or []) if c]
+    img_bytes = None
+    if eng in ("recraft", "ideogram"):
+        fal_prompt = f"{_style_directive(brand)}\nSUBJECT: {base_prompt}"
+        try:
+            img_bytes = await asyncio.to_thread(fal_images.generate, eng, fal_prompt, palette)
+        except Exception as e:
+            logger.warning(f"fal ({eng}) failed, falling back to Gemini: {e}")
+    if img_bytes is None:
+        prompt = f"{_style_directive(brand)}\nTOPIC/SUBJECT: {base_prompt}.\n{_brand_directives(brand)}"
+        chat = LlmChat(api_key=EMERGENT_KEY, session_id=f"social-img:{post_id}:{uuid.uuid4().hex[:6]}",
+                       system_message=("You generate premium BRANDED MARKETING GRAPHICS (flat/3D illustrations and "
+                                       "infographics). Never output photorealistic photographs of real people unless the "
+                                       "style explicitly says 'photo'. Keep composition clean with space for text."))
+        chat.with_model("gemini", IMAGE_MODEL).with_params(modalities=["image", "text"])
+        _text, images = await chat.send_message_multimodal_response(
+            UserMessage(text=f"Create a striking, professional social media graphic (square, 1:1). {prompt}"))
+        if not images:
+            raise HTTPException(status_code=502, detail="No image generated")
+        img_bytes = base64.b64decode(images[0]["data"])
     path = f"{storage.APP_NAME}/social/{user['user_id']}/{post_id}.png"
     put = await asyncio.to_thread(storage.put_object, path, img_bytes, "image/png")
     set_fields = {"image_path": put["path"]}

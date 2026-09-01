@@ -271,3 +271,10 @@ LUMIÈRE turns real lived experiences into cinema through an agentic closed loop
 - Frontend: `SocialStudio` adds "Upload photo"/"Replace" (data-testid social-upload-<id>/social-replace-<id>) + "post copy only" hint; the overlay editor button relabelled "Texto + Logo". `SocialImageEditor` now has Headline (top) + Subline (bottom) layers (social-headline-* / social-subline-*), each with position/color/size, sending a `texts` array.
 - Verified via curl + rendered PNG: upload photo + headline/subline overlay produces pixel-crisp typography.
 
+
+## FAL.AI IMAGE ENGINE (Recraft V3 + Ideogram v3) — 2026-06
+- fal_images.py: fal.ai via Emergent Universal Key (queue proxy). recraft (fal-ai/recraft/v3/text-to-image + brand palette RGB, style digital_illustration) and ideogram (fal-ai/ideogram/v3). Returns PNG bytes.
+- social.py generate_design(engine=): per-post engine (recraft|ideogram|gemini), default brand.image_engine or recraft; Gemini AUTO-FALLBACK on any fal error; stored in object storage. BrandIn.image_engine. Frontend SocialStudio: selector social-engine passed as ?engine=.
+- VERIFIED: Recraft produced agency-quality 3D illustration (SHIMAYA/GET LOST), far better than Gemini; stored+served.
+- KNOWN ISSUE (next fix): long fal generations can exceed the k8s ingress ~100s timeout -> browser POST returns 504 though the image completes server-side. Needs async job + polling for the design endpoint. NOT yet e2e-tested via testing_agent.
+- Then B: verify Veo playback (DONE jobs have empty result_url; playback relies on /video/download/{id} proxy) + admin cost panel.

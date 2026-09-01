@@ -55,6 +55,7 @@ export default function SocialStudio() {
   const [brand, setBrand] = useState({ name: "", colors: ["#D6A85F", "#111111", "#F5F1E8"], auto_logo: false, image_style: "infographic", website: "" });
   const [brandStyles, setBrandStyles] = useState(["infographic", "illustration3d", "flatvector", "minimal", "photo"]);
   const [savingBrand, setSavingBrand] = useState(false);
+  const [engine, setEngine] = useState("recraft");
   const [hasLogo, setHasLogo] = useState(false);
   const [logoBust, setLogoBust] = useState(Date.now());
   const logoRef = useRef();
@@ -103,7 +104,7 @@ export default function SocialStudio() {
 
   const genDesign = async (id) => {
     setW(id, "design");
-    try { await api.post(`/social/posts/${id}/design`); await loadPosts(); toast.success("Design ready"); }
+    try { await api.post(`/social/posts/${id}/design?engine=${engine}`); await loadPosts(); toast.success("Design ready"); }
     catch { toast.error("Design failed"); } finally { setW(id, null); }
   };
 
@@ -278,6 +279,12 @@ export default function SocialStudio() {
                           </>
                         ) : (
                           <div className="flex flex-col items-center gap-2 p-4">
+                            <select value={engine} onChange={(e) => setEngine(e.target.value)} data-testid="social-engine"
+                              className="bg-white border border-lumiere-ink/15 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-lumiere-iris">
+                              <option value="recraft">Recraft V3 · {lang === "es" ? "ilustración/marca" : "illustration/brand"}</option>
+                              <option value="ideogram">Ideogram v3 · {lang === "es" ? "texto perfecto" : "perfect text"}</option>
+                              <option value="gemini">Gemini · {lang === "es" ? "rápido" : "fast"}</option>
+                            </select>
                             <div className="flex gap-2">
                               <button data-testid={`social-design-${p.id}`} onClick={() => genDesign(p.id)} disabled={!!working[p.id]}
                                 className="inline-flex items-center gap-2 bg-lumiere-iris/10 border border-lumiere-iris/40 text-lumiere-iris px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest hover:bg-lumiere-iris/20 transition-colors">
