@@ -74,7 +74,6 @@ export function SocialImageEditor({ post, lang, onDone, onClose }) {
             {/* text layers */}
             <Layer label={lang === "es" ? "Titular (arriba)" : "Headline (top)"} val={headline} set={setHeadline} lang={lang} idp="headline" />
             <Layer label={lang === "es" ? "Subtítulo (abajo)" : "Subline (bottom)"} val={subline} set={setSubline} lang={lang} idp="subline" />
-            </div>
             {/* logo */}
             <div className="border-t border-lumiere-ink/10 pt-4">
               <div className="flex items-center justify-between">

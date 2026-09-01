@@ -1,0 +1,24 @@
+{
+  "summary": "Frontend-only verification of Lumiere Social Studio bug-fix (JSX compile crash) and new features (upload own photo, headline/subline overlay, longer captions). All items PASS. Page loads with no webpack overlay, SocialImageEditor opens without runtime errors, headline/subline layer testids resolve, Apply persists the overlay and closes the modal, upload-photo and replace labels work end-to-end via hidden file inputs, 'or post copy only' hint renders for image-less posts, and freshly generated captions are 164 words (within 150-230 target).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "SocialImageEditor.jsx effect uses empty deps [] with an eslint-warn opportunity — fine for current UX (initial only).",
+    "SocialStudio.jsx mutates p._when directly (line 316) rather than using state; works but is an anti-pattern.",
+    "Two 401 console errors at initial page load (likely /account before token attach) — cosmetic, does not block the flow."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "N/A (skipped)", "frontend": "100%" },
+  "test_credentials": "cookie session_token + localStorage lumiere_token = admin_sess_1788202740303 (studio plan)",
+  "seed_data_creation": "Generated 2 fresh posts via /social/plan during test; test image /tmp/test_upload.png (400x400 PNG) used for upload-photo verification on one existing post.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Route is /social. Auth via cookie + localStorage token. Existing 12+ posts on that account include legacy captions with lower word counts (25/79/94) — only newly generated captions (post-fix) are guaranteed 150-230 words. To reproduce copy-length check, generate a new plan and inspect the first N newly added social-caption-<id> textareas. All Editor testids (social-headline-toggle/content/pos-top/color-#FFD400/size and their subline counterparts) work; use force=True for pos pill click if needed. Upload photo pattern: page.query_selector('[data-testid=social-upload-<id>] input[type=file]').set_input_files(path).",
+  "rca of the issue": "Prior JSX crash caused by stray </div> in SocialImageEditor.jsx after refactoring text overlay into Headline+Subline Layer subcomponents. Fix (removing the extra </div>) verified: page compiles, editor opens, headline+subline layers render, POST /api/social/posts/{id}/overlay accepts {logo, texts:[...]} and returns updated design (modal closes on success)."
+}
