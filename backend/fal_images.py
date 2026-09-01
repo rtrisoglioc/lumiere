@@ -66,7 +66,9 @@ def generate(model: str, prompt: str, palette: list = None) -> bytes:
             payload["colors"] = colors
     else:  # ideogram
         payload = {"prompt": clean, "image_size": "square_hd", "rendering_speed": "BALANCED"}
-    data = _run(endpoint, payload)
+    # 70s cap so a slow fal generation fails over to the fast Gemini fallback
+    # BEFORE the ~100s k8s ingress timeout would 504 the request ("Design failed").
+    data = _run(endpoint, payload, timeout=55)
     images = data.get("images") or []
     if not images or not images[0].get("url"):
         raise RuntimeError("no_image")

@@ -215,6 +215,7 @@ async def generate_design(post_id: str, engine: str = None, user: dict = Depends
     brand = await _get_brand(user["user_id"])
     base_prompt = (post.get("design_prompt") or "Educational post about the brand's core value")
     eng = engine or brand.get("image_engine") or "recraft"
+    served_by = eng
     palette = [c for c in (brand.get("colors") or []) if c]
     img_bytes = None
     if eng in ("recraft", "ideogram"):
@@ -224,6 +225,7 @@ async def generate_design(post_id: str, engine: str = None, user: dict = Depends
         except Exception as e:
             logger.warning(f"fal ({eng}) failed, falling back to Gemini: {e}")
     if img_bytes is None:
+        served_by = "gemini"
         prompt = f"{_style_directive(brand)}\nTOPIC/SUBJECT: {base_prompt}.\n{_brand_directives(brand)}"
         chat = LlmChat(api_key=EMERGENT_KEY, session_id=f"social-img:{post_id}:{uuid.uuid4().hex[:6]}",
                        system_message=("You generate premium BRANDED MARKETING GRAPHICS (flat/3D illustrations and "
@@ -267,7 +269,7 @@ async def generate_design(post_id: str, engine: str = None, user: dict = Depends
     if unset_fields:
         op["$unset"] = unset_fields
     await db.social_posts.update_one({"id": post_id}, op)
-    return {"ok": True, "image_url": f"/api/social/posts/{post_id}/image"}
+    return {"ok": True, "image_url": f"/api/social/posts/{post_id}/image", "served_by": served_by}
 
 
 @social_router.get("/posts/{post_id}/image")

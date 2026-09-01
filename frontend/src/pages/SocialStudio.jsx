@@ -104,7 +104,10 @@ export default function SocialStudio() {
 
   const genDesign = async (id) => {
     setW(id, "design");
-    try { await api.post(`/social/posts/${id}/design?engine=${engine}`); await loadPosts(); toast.success("Design ready"); }
+    try { const r = await api.post(`/social/posts/${id}/design?engine=${engine}`); await loadPosts();
+      const by = r.data?.served_by;
+      if (by && by !== engine && engine !== "gemini") toast.warning(lang === "es" ? `Recraft/Ideogram no respondió a tiempo — generado con Gemini` : `fal.ai timed out — generated with Gemini`);
+      else toast.success(lang === "es" ? "Diseño listo" : "Design ready"); }
     catch { toast.error("Design failed"); } finally { setW(id, null); }
   };
 

@@ -1,0 +1,22 @@
+{
+  "summary": "Backend-only regression test of the LUMIÈRE Social Studio 'Design failed' bug fix (55s fal.ai cap + Gemini fallback). Set brand image_style=minimal via PUT /api/social/brand, then ran POST /api/social/posts/{id}/design against a DRAFT post for engine=recraft, ideogram, gemini — all returned HTTP 200 with ok:true + image_url, and GET /api/social/posts/{id}/image returned 200 image/*. Also verified 3D illustration still works (image_style=illustration3d + engine=recraft -> 200 image). Every call completed under the 95s bound (i.e., well within the ~100s k8s ingress window). 5/5 pytest tests passed in 99.65s total (parallel).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/backend/tests/test_social_design_generation_regression.py",
+    "/app/test_reports/pytest/pytest_results_iter17.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "fal_images.generate now enforces timeout=55s; social.generate_design catches any exception and falls back to Gemini so the endpoint always returns a stored PNG. Behavior confirmed for both slow (recraft/ideogram) and native (gemini) paths.",
+    "Consider surfacing which engine actually produced the image (e.g., include a `served_by` field in the response) so the client can display 'generated via fallback' — currently the client cannot distinguish fal vs Gemini fallback."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "100% (5/5)", "frontend": "N/A (skipped)" },
+  "test_credentials": "Authorization: Bearer admin_sess_1788202740303 (studio plan). BASE_URL=https://lumiere-studio-7.preview.emergentagent.com",
+  "seed_data_creation": "Reused existing DRAFT posts on the admin account. No new plan needed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "test_social_design_generation_regression.py is the canonical regression for the 'Design failed' bug. Run it after any change to backend/fal_images.py or backend/social.py::generate_design. It exercises brand minimal + recraft/ideogram/gemini and brand illustration3d + recraft. Total wall time ~100s (parallel).",
+  "rca of the issue": "Original bug: fal.ai Recraft calls for image_style=minimal often exceeded the k8s ingress ~100s timeout, so the request 504'd and the UI surfaced 'Design failed'. Fix (verified): fal_images.generate() invokes _run(endpoint, payload, timeout=55) so the fal queue call is bounded at 55s; if it times out or errors, generate_design catches and returns a Gemini-produced PNG. Net effect: endpoint always returns 200 + image_url within the ingress window. Regression test confirms across all three engines and both problematic (minimal) and previously-working (illustration3d) styles."
+}
