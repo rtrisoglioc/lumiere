@@ -11,7 +11,12 @@ W, H, FPS = 1280, 720, 30
 
 
 def _run(cmd):
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    except FileNotFoundError as e:
+        class _F:
+            returncode = 127; stderr = f"binary_not_found: {e}"; stdout = ""
+        return _F()
 
 
 def build_insert_clip(image_path: str, out: Path, duration: float = 2.0, effect: str = "kenburns") -> bool:

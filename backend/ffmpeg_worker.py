@@ -8,8 +8,20 @@ import subprocess
 from pathlib import Path
 
 
-def _run(cmd: list) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+class _Failed:
+    def __init__(self, err):
+        self.returncode = 127
+        self.stderr = err
+        self.stdout = ""
+
+
+def _run(cmd: list):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    except FileNotFoundError as e:
+        return _Failed(f"binary_not_found: {e}")
+    except subprocess.TimeoutExpired:
+        return _Failed("ffmpeg_timeout")
 
 
 def probe(path: str) -> dict:

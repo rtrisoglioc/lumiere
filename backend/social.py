@@ -61,6 +61,14 @@ STYLE_PRESETS = {
                    "simple line-icons, corporate presentation aesthetic, lots of whitespace. NO photos, NO realistic people."),
     "minimal": ("Ultra-minimal corporate graphic: solid brand-color background, one simple abstract shape or line-icon, "
                 "large clean area reserved for a title. NO photos of people."),
+    "poster": ("BOLD social POSTER / trend style: a solid vivid single-color background in the brand color, HUGE "
+               "impactful display typography headline (2-3 words, stacked, all caps), ONE playful stylized 3D-rendered "
+               "mascot/character (clay/Blender look) centered, the brand logo/name at the TOP and a short catchy handle "
+               "or tagline at the BOTTOM. High energy, punchy, meme-ready. STRICTLY NO photorealistic real people."),
+    "badge": ("Premium EMBLEM / BADGE / seal design (certification style): a centered circular badge with a ribbon or "
+              "medal accent, a bold title above it, and the brand name inside a rounded pill at the bottom, on a "
+              "smooth brand-colored gradient background with subtle large watermark text behind. Corporate, trustworthy, "
+              "high-end. NO photos of people."),
     "photo": ("Premium cinematic photograph, editorial magazine quality, tasteful depth of field, professional lighting."),
 }
 STYLE_LABELS = list(STYLE_PRESETS.keys())

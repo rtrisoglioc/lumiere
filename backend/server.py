@@ -452,6 +452,9 @@ class ProEditIn(BaseModel):
     logo: Optional[dict] = None
     captions: Optional[dict] = None
     inserts: Optional[list] = None
+    text_overlay: Optional[dict] = None
+    transition_speed: Optional[str] = None
+    music_volume: Optional[float] = None
 
 
 @api.post("/cuts/{cut_id}/pro-edit")
@@ -465,6 +468,7 @@ async def pro_edit_cut(cut_id: str, body: ProEditIn, user: dict = Depends(get_cu
         raise HTTPException(status_code=400, detail="cut_not_ready")
     exp_id = parent["experience_id"]
     edl = parent.get("edl") or []
+    TDUR = {"slow": 1.0, "med": 0.5, "fast": 0.25}.get(body.transition_speed or "med", 0.5)
     scene_transition = body.transition in ff.XFADE_MAP and len(edl) >= 2
     effective_transition = body.transition
     base_tmp = None
@@ -485,7 +489,7 @@ async def pro_edit_cut(cut_id: str, body: ProEditIn, user: dict = Depends(get_cu
             base_tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
             trdir = WORKDIR / exp_id / "tmp" / f"protrans_{uuid.uuid4().hex[:8]}"
             res = await asyncio.to_thread(ff.render_cut_with_transitions, edl,
-                                          lambda aid: resolved.get(aid), trdir, Path(base_tmp), body.transition)
+                                          lambda aid: resolved.get(aid), trdir, Path(base_tmp), body.transition, TDUR)
             if res.get("ok"):
                 src_bytes = Path(base_tmp).read_bytes()
                 effective_transition = "none"  # transitions already baked between scenes
@@ -558,7 +562,9 @@ async def pro_edit_cut(cut_id: str, body: ProEditIn, user: dict = Depends(get_cu
             logger.warning(f"captions failed (cut): {e}")
         captions_status = "applied" if sub_tmp else "no_speech"
     opts = {"aspect": body.aspect, "filter": body.filter, "speed": body.speed,
-            "transition": effective_transition, "logo": logo}
+            "transition": effective_transition, "logo": logo,
+            "text_overlay": body.text_overlay, "transition_dur": TDUR,
+            "music_volume": body.music_volume if body.music_volume is not None else 0.85}
     try:
         await asyncio.to_thread(video_editor.transform_video, edit_src, out_tmp, opts, logo_tmp, music_tmp, sub_tmp)
         out_bytes = Path(out_tmp).read_bytes()

@@ -242,3 +242,22 @@ LUMIÈRE turns real lived experiences into cinema through an agentic closed loop
 - Frontend `SocialStudio.jsx`: Brand Kit now has a Visual Style dropdown (data-testid brand-style) + Website field (brand-website).
 - Brand Kit LOGO UPLOAD (2026-06): logo upload + live preview directly in the Brand Kit (data-testid brand-logo-upload / brand-logo-file / brand-logo-preview); uploading auto-enables `auto_logo`. Verified end-to-end: uploaded a "RED AGILE" logo → it is stamped in the top-right corner of the generated infographic, with the website at the footer. (POST /me/logo accepts png/jpeg/webp, stored via storage; served at /me/logo?auth=token.)
 
+---
+
+## EDITOR RESULT PREVIEW + TEXT-ON-VIDEO + TRANSITION SPEED + MUSIC VOL + POSTER STYLES — 2026-06 (tested: iteration_15.json, frontend 100%)
+
+### Root cause of "subtitles/music don't work" = misleading PREVIEW (not a real bug)
+- Proven by extracting frames from real exports: subtitles ARE burned, the logo IS stamped, and music IS present (mean ‑23 dB). The editor's PREVIEW only showed a sample caption badge and played the SOURCE's original audio, so users thought it failed.
+- Fix: after Apply, `CutEditor` shows a RESULT `<video>` (data-testid cut-editor-result) that plays the exported cut WITH audio + burned subtitles; 'Edit again' (cut-editor-editagain) returns. The source preview is now `muted` + labelled 'Preview · muted', and the caption badge says '(sample) real captions on export'.
+
+### New Cut Pro Editor controls
+- Text on video (drawtext, auto-fit to width): top/center/bottom + size. `ProEditIn.text_overlay` {enabled,content,position,size}. Verified frame: "FARMEANDO AURA" burned top.
+- Transition speed: slow=1.0 / med=0.5 / fast=0.25s → `transition_speed`; applied to both scene xfade (tdur) and whole-clip fade.
+- Music volume slider: `music_volume` (0–1.5). Verified louder at 1.2 (‑20.3 dB vs ‑23 dB).
+
+### Social image styles (poster/badge) matching references
+- Added `poster` (bold huge display type + central 3D mascot + solid vivid brand bg + logo top + handle bottom) and `badge` (emblem/seal) to STYLE_PRESETS + STYLE_LABELS. Verified: a "PATAGONIA DREAMING" poster generated with 3D character, red brand bg, brand name top, handle bottom, corner logo — matches the user's Shimaya reference.
+
+### Hardening
+- `ffmpeg_worker._run`/`video_editor._run`/`inserts._run` now catch FileNotFoundError/timeout and return a structured failure (a transient `ffprobe` FileNotFoundError during hot-reload previously surfaced as a 500).
+

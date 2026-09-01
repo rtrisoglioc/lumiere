@@ -15,6 +15,8 @@ const STYLE_LABELS = {
   illustration3d: { es: "Ilustración 3D", en: "3D illustration" },
   flatvector: { es: "Vector plano", en: "Flat vector" },
   minimal: { es: "Minimal corporativo", en: "Minimal corporate" },
+  poster: { es: "Póster / Trend", en: "Poster / Trend" },
+  badge: { es: "Emblema / Sello", en: "Badge / Emblem" },
   photo: { es: "Foto cinematográfica", en: "Cinematic photo" },
 };
 const STATUS_COLOR = { draft: "text-lumiere-ink/50 border-lumiere-ink/20", scheduled: "text-lumiere-gold border-lumiere-gold/50", published: "text-lumiere-sage border-lumiere-sage/50" };

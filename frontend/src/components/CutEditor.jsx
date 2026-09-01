@@ -20,6 +20,10 @@ export function CutEditor({ cut, lang, onDone, onClose }) {
   const [musicId, setMusicId] = useState("");
   const [tracks, setTracks] = useState([]);
   const [captions, setCaptions] = useState({ enabled: false, style: "pop", lang: "" });
+  const [textOv, setTextOv] = useState({ enabled: false, content: "", position: "top", size: 0.06 });
+  const [transSpeed, setTransSpeed] = useState("med");
+  const [musicVol, setMusicVol] = useState(0.85);
+  const [result, setResult] = useState(null);
   const [logo, setLogo] = useState({ enabled: false, x: 0.95, y: 0.95, scale: 0.18, opacity: 0.85 });
   const [hasLogo, setHasLogo] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -78,11 +82,11 @@ export function CutEditor({ cut, lang, onDone, onClose }) {
   const apply = async () => {
     setBusy(true);
     try {
-      const r = await api.post(`/cuts/${cut.id}/pro-edit`, { aspect, filter, speed, transition, music_id: musicId || null, logo, captions, inserts: cutInserts.map((i) => ({ id: i.id, at_sec: i.at_sec, duration: i.duration, effect: i.effect })) }, { timeout: 300000 });
+      const r = await api.post(`/cuts/${cut.id}/pro-edit`, { aspect, filter, speed, transition, music_id: musicId || null, logo, captions, text_overlay: textOv, transition_speed: transSpeed, music_volume: musicVol, inserts: cutInserts.map((i) => ({ id: i.id, at_sec: i.at_sec, duration: i.duration, effect: i.effect })) }, { timeout: 300000 });
       if (r.data?.captions_status === "no_speech")
         toast.warning(lang === "es" ? "No se detectó voz clara para subtítulos en este corte." : "No clear speech detected for captions in this cut.");
-      toast.success(lang === "es" ? "Nueva versión lista" : "New version ready");
-      onDone?.(r.data); onClose?.();
+      toast.success(lang === "es" ? "¡Listo! Mira el resultado abajo ▶" : "Done! See the result below ▶");
+      setResult(r.data); onDone?.(r.data);
     } catch (e) { toast.error(e?.response?.data?.detail || (lang === "es" ? "Falló" : "Failed")); }
     finally { setBusy(false); }
   };
@@ -97,17 +101,33 @@ export function CutEditor({ cut, lang, onDone, onClose }) {
         <div className="grid md:grid-cols-2 gap-6 p-6">
           <div>
             <div className={`relative ${aspectClass} bg-black rounded-lg overflow-hidden max-h-[60vh] mx-auto`} data-testid="cut-editor-preview">
-              <video src={fileUrl(cut.storage_path)} controls loop onLoadedMetadata={(e) => setVideoDur(e.target.duration || 30)} className="w-full h-full object-cover" style={{ filter: CSS_FILTER[filter] }} />
-              {logo.enabled && hasLogo && (
-                <img src={logoUrl} alt="" style={{ position: "absolute", width: `${logo.scale * 100}%`, opacity: logo.opacity, left: `calc((100% - ${logo.scale * 100}%) * ${logo.x})`, top: `calc((100% - ${logo.scale * 100}%) * ${logo.y})`, pointerEvents: "none" }} />
-              )}
-              {captions.enabled && (
-                <div className="absolute inset-x-0 bottom-[9%] flex justify-center pointer-events-none" data-testid="cut-captions-preview">
-                  <span className={`px-2 py-0.5 font-bold text-white text-center leading-tight ${captions.style === "boxed" ? "bg-black/70" : ""} ${captions.style === "pop" ? "text-lumiere-gold uppercase" : ""}`}
-                    style={{ textShadow: captions.style === "boxed" ? "none" : "0 1px 3px #000, 0 0 3px #000", fontSize: "clamp(11px,3vw,20px)" }}>
-                    {lang === "es" ? "Subtítulos automáticos IA" : "AI auto-captions"}
-                  </span>
-                </div>
+              {result ? (
+                <>
+                  <video src={fileUrl(result.storage_path)} controls autoPlay loop className="w-full h-full object-cover" data-testid="cut-editor-result" />
+                  <span className="absolute top-2 left-2 bg-lumiere-gold text-lumiere-ink px-2 py-1 rounded font-mono text-[0.55rem] uppercase tracking-widest">{lang === "es" ? "Resultado · con audio" : "Result · with audio"}</span>
+                  <button onClick={() => setResult(null)} data-testid="cut-editor-editagain" className="absolute top-2 right-2 bg-black/70 text-white px-2 py-1 rounded font-mono text-[0.55rem] uppercase tracking-widest hover:bg-black">{lang === "es" ? "Editar de nuevo" : "Edit again"}</button>
+                </>
+              ) : (
+                <>
+                  <video src={fileUrl(cut.storage_path)} controls loop muted onLoadedMetadata={(e) => setVideoDur(e.target.duration || 30)} className="w-full h-full object-cover" style={{ filter: CSS_FILTER[filter] }} />
+                  <span className="absolute top-2 left-2 bg-black/60 text-white/80 px-2 py-1 rounded font-mono text-[0.5rem] uppercase tracking-widest">{lang === "es" ? "Vista previa · sin audio" : "Preview · muted"}</span>
+                  {logo.enabled && hasLogo && (
+                    <img src={logoUrl} alt="" style={{ position: "absolute", width: `${logo.scale * 100}%`, opacity: logo.opacity, left: `calc((100% - ${logo.scale * 100}%) * ${logo.x})`, top: `calc((100% - ${logo.scale * 100}%) * ${logo.y})`, pointerEvents: "none" }} />
+                  )}
+                  {textOv.enabled && textOv.content && (
+                    <div className={`absolute inset-x-0 flex justify-center px-4 pointer-events-none ${textOv.position === "top" ? "top-[6%]" : textOv.position === "center" ? "top-1/2 -translate-y-1/2" : "bottom-[12%]"}`}>
+                      <span className="font-bold text-white text-center leading-tight" style={{ textShadow: "0 2px 4px #000,0 0 3px #000", fontSize: "clamp(14px,4vw,30px)" }}>{textOv.content}</span>
+                    </div>
+                  )}
+                  {captions.enabled && (
+                    <div className="absolute inset-x-0 bottom-[9%] flex justify-center pointer-events-none" data-testid="cut-captions-preview">
+                      <span className={`px-2 py-0.5 font-bold text-white text-center leading-tight ${captions.style === "boxed" ? "bg-black/70" : ""} ${captions.style === "pop" ? "text-lumiere-gold uppercase" : ""}`}
+                        style={{ textShadow: captions.style === "boxed" ? "none" : "0 1px 3px #000, 0 0 3px #000", fontSize: "clamp(11px,3vw,20px)" }}>
+                        {lang === "es" ? "(ejemplo) subtítulos reales al exportar" : "(sample) real captions on export"}
+                      </span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -115,6 +135,11 @@ export function CutEditor({ cut, lang, onDone, onClose }) {
             <Ctrl label={lang === "es" ? "Formato" : "Format"}>{ASPECTS.map(([a]) => <Pill key={a} active={aspect === a} onClick={() => setAspect(a)} testid={`cut-aspect-${a}`}>{a}</Pill>)}</Ctrl>
             <Ctrl label={lang === "es" ? "Transición" : "Transition"}>{TRANSITIONS.map((tr) => <Pill key={tr} active={transition === tr} onClick={() => setTransition(tr)} testid={`cut-transition-${tr}`}>{tr}</Pill>)}</Ctrl>
             <p className="text-[0.6rem] text-zinc-500 -mt-2">{lang === "es" ? "Se aplica entre escenas del corte al exportar." : "Applied between scenes on export."}</p>
+            {transition !== "none" && (
+              <Ctrl label={lang === "es" ? "Velocidad de transición" : "Transition speed"}>
+                {[["slow", lang === "es" ? "Lenta" : "Slow"], ["med", lang === "es" ? "Media" : "Med"], ["fast", lang === "es" ? "Rápida" : "Fast"]].map(([v, l]) => <Pill key={v} active={transSpeed === v} onClick={() => setTransSpeed(v)} testid={`cut-transpeed-${v}`}>{l}</Pill>)}
+              </Ctrl>
+            )}
             <Ctrl label={lang === "es" ? "Estilo" : "Look"}>{FILTERS.map((f) => <Pill key={f} active={filter === f} onClick={() => setFilter(f)} testid={`cut-filter-${f}`}>{f}</Pill>)}</Ctrl>
             <Ctrl label={lang === "es" ? "Velocidad" : "Speed"}>{SPEEDS.map(([s, l]) => <Pill key={s} active={speed === s} onClick={() => setSpeed(s)} testid={`cut-speed-${s}`}>{l}</Pill>)}</Ctrl>
             <div>
@@ -124,6 +149,24 @@ export function CutEditor({ cut, lang, onDone, onClose }) {
                 <option value="">{lang === "es" ? "Sin música (audio original)" : "No music (original audio)"}</option>
                 {tracks.map((t) => <option key={t.id} value={t.id}>{`${t.title?.[lang] || t.title?.en || ""} · ${t.mood}`}</option>)}
               </select>
+              {musicId && <div className="mt-2"><Slider label={`${lang === "es" ? "Volumen música" : "Music volume"} ${Math.round(musicVol * 100)}%`} min={0} max={150} value={musicVol * 100} onChange={(v) => setMusicVol(v / 100)} testid="cut-music-volume" /></div>}
+            </div>
+            <div className="border-t border-white/10 pt-3">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[0.6rem] uppercase tracking-widest text-zinc-500">{lang === "es" ? "Texto en el video" : "Text on video"}</span>
+                <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={textOv.enabled} data-testid="cut-text-toggle" onChange={(e) => setTextOv({ ...textOv, enabled: e.target.checked })} /><span className="text-xs text-zinc-300">{lang === "es" ? "Activar" : "Enable"}</span></label>
+              </div>
+              {textOv.enabled && (
+                <div className="mt-2 space-y-2">
+                  <input value={textOv.content} onChange={(e) => setTextOv({ ...textOv, content: e.target.value })} data-testid="cut-text-content"
+                    placeholder={lang === "es" ? "Escribe el texto…" : "Type your text…"}
+                    className="w-full bg-lumiere-ink border border-white/15 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-lumiere-iris" />
+                  <div className="flex flex-wrap gap-1.5">
+                    {[["top", lang === "es" ? "Arriba" : "Top"], ["center", lang === "es" ? "Medio" : "Center"], ["bottom", lang === "es" ? "Abajo" : "Bottom"]].map(([v, l]) => <Pill key={v} active={textOv.position === v} onClick={() => setTextOv({ ...textOv, position: v })} testid={`cut-text-pos-${v}`}>{l}</Pill>)}
+                  </div>
+                  <Slider label={`${lang === "es" ? "Tamaño" : "Size"} ${Math.round(textOv.size * 100)}`} min={3} max={14} value={textOv.size * 100} onChange={(v) => setTextOv({ ...textOv, size: v / 100 })} testid="cut-text-size" />
+                </div>
+              )}
             </div>
             <div className="border-t border-white/10 pt-3">
               <div className="flex items-center justify-between">

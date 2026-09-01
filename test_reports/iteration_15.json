@@ -1,0 +1,32 @@
+{
+  "summary": "Frontend-only E2E of new LUMIÈRE features in Cut Pro Editor (RESULT player after Apply, Text-on-video overlay, transition-speed, music-volume with conditional rendering) and Social Studio new brand styles 'Póster / Trend' + 'Emblema / Sello'. All primary flows PASS. Regression: applying still creates a new version (V1→V10 accumulated) and returning via 'Edit again' restores the muted source preview.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/cuts/{id}/pro-edit", "issue": "One transient 500 observed at 21:51 UTC with FileNotFoundError: 'ffprobe' from ffmpeg_worker.probe(). Not reproducible on the very next attempt (curl + UI both succeeded and produced V9/V10). PATH of the uvicorn process includes /usr/bin (where ffprobe lives), so this was likely a race right after supervisor reload/hot-reload. Recommend adding a stderr guard (returncode / FileNotFoundError catch) so the API returns a clean error instead of 500 if the binary is momentarily unavailable."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_15.json"],
+  "action_items": [
+    "IMPORTANT — Route hint correction for future test runs: the Experience page lives at /studio/:id (not /experience/:id). The review_request instructed 'open the Experience workspace' with EXP_ID; the working URL is https://lumiere-studio-7.preview.emergentagent.com/studio/58a17b06-8019-4532-88d1-6dd4d585c59e.",
+    "Harden ffmpeg_worker.probe/_run against FileNotFoundError (return {ok:False,error:'ffprobe missing'}) so pro-edit yields a 4xx/user-facing error instead of a 500 stacktrace."
+  ],
+  "critical_code_review_comments": [
+    "CutEditor.jsx line ~150: <option> still renders bilingual title as a template-string via t.title?.[lang] which is fine now (previously a <span> caused hydration warning) — resolved in this iteration.",
+    "CutEditor.jsx apply() timeout 300000ms; the RESULT player appears within ~40-90s in practice. Consider polling/streaming progress for UX during long renders.",
+    "Backend ffmpeg_worker.py: subprocess.run with no error handling around missing binaries; a single transient failure surfaces as 500. Wrap probe/_run with try/except FileNotFoundError."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skip per request)", "frontend": "100% for all requested flows (Cut Pro Editor RESULT player, controls conditionality, Social Studio poster style)"},
+  "test_credentials": "Editor: cookie session_token = localStorage lumiere_token = 'e2e_editor_sess_fixed' (user_ded9f8fff749, Experience 58a17b06-8019-4532-88d1-6dd4d585c59e). Admin (social): 'admin_sess_1788202740303'.",
+  "seed_data_creation": "Applied 1 pro-edit render on V1 → produced V10 with dissolve+slow transition, music track + volume 120%, text overlay 'LUMIÈRE E2E' centered. Saved brand image_style='poster' for admin. Generated a poster-style design on first draft social post (id 189aa8c9-2f0d-4f00-91ef-d4a615b7eeb2).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Experience route is /studio/:id. Cut editor opens from tab-edit → pro-edit-cut-<version>. Verified testids: cut-editor, cut-editor-preview, cut-editor-result, cut-editor-editagain, cut-editor-apply, cut-editor-close, cut-transition-*, cut-transpeed-slow/med/fast (only when transition!=none), cut-music, cut-music-volume (only when music selected), cut-text-toggle, cut-text-content, cut-text-pos-top/center/bottom, cut-text-size (only when text-toggle enabled). Social: brand-style options now include values 'poster' and 'badge'. Apply render takes ~40-90s (headroom: 200s). The editor user's experience contained 8 prior versions when testing began; V10 is the latest after this run.",
+  "rca of the issue": "Transient 500 on /api/cuts/{id}/pro-edit: FileNotFoundError('ffprobe') from subprocess.run inside ffmpeg_worker.probe(). Repro: first UI Apply hit right after previous render churn. Mitigation: the very next curl and UI Apply both succeeded (V9, V10 produced with dissolve+music+text overlay). Long-term fix: wrap subprocess calls with try/except FileNotFoundError → return structured error; add a startup healthcheck for ffprobe/ffmpeg binaries."
+}
