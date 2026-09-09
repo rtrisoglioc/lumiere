@@ -132,17 +132,17 @@ const PLANS = [
     id: "creator", name: "Creator", price: "$49", rec: true,
     tag: { en: "Real AI video with Vertex Veo", es: "Video IA real con Vertex Veo" },
     features: {
-      en: ["Everything in Free", "AI Video Generation (Veo)", "20 clips / month", "Priority rendering"],
-      es: ["Todo lo de Free", "Generación de Video IA (Veo)", "20 clips / mes", "Renderizado prioritario"],
+      en: ["Everything in Free", "Golden-hour shot planning", "20 films / month", "Priority rendering"],
+      es: ["Todo lo de Free", "Planificación con golden hour", "20 películas / mes", "Renderizado prioritario"],
     },
     cta: { en: "Get Creator", es: "Elegir Creator" },
   },
   {
     id: "studio", name: "Studio", price: "$149",
-    tag: { en: "AI Social Content Studio", es: "AI Social Content Studio" },
+    tag: { en: "Full agentic loop", es: "Loop agéntico completo" },
     features: {
-      en: ["Everything in Creator", "Expanded video quota", "AI Social Content Studio", "Auto post plan + scheduling"],
-      es: ["Todo lo de Creator", "Cuota de video ampliada", "AI Social Content Studio", "Plan de posts + programación"],
+      en: ["Everything in Creator", "Expanded film quota", "Live Director + Veo reference shots", "Conversational re-editing"],
+      es: ["Todo lo de Creator", "Cuota de películas ampliada", "Live Director + tomas de referencia Veo", "Re-edición conversacional"],
     },
     cta: { en: "Get Studio", es: "Elegir Studio" },
   },

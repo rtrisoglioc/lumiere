@@ -1,29 +1,34 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { User, CreditCard, LogOut, Sparkles, ChevronLeft } from "lucide-react";
-import { LanguageToggle } from "@/components/LanguageToggle";
+import { User, LogOut, ChevronLeft, Home as HomeIcon, Film, Plus, Clapperboard } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { useI18n } from "@/i18n";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+
+const LAST_EXP_KEY = "lumiere_last_exp";
 
 export function Header({ dark = false, back = false }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
-  const { t } = useI18n();
 
   const base = dark ? "bg-lumiere-base/70 border-white/10" : "bg-lumiere-ivory/70 border-black/10";
   const txt = dark ? "text-lumiere-ivory" : "text-lumiere-ink";
   const sub = dark ? "text-lumiere-ivory/60" : "text-lumiere-ink/50";
 
+  const goStudio = () => {
+    const last = localStorage.getItem(LAST_EXP_KEY);
+    navigate(last ? `/studio/${last}` : "/experiences");
+  };
+
+  // Exactly 5 primary navigation entries (v2.0 Block 0).
   const nav = [
-    { label: t("home"), to: "/studio" },
-    { label: t("createVideo"), to: "/create-video" },
-    { label: "Social", to: "/social" },
-    { label: t("pricing"), to: "/pricing" },
+    { key: "home", label: "Home", icon: HomeIcon, onClick: () => navigate("/studio"), active: location.pathname === "/studio" },
+    { key: "experiences", label: "Experiences", icon: Film, onClick: () => navigate("/experiences"), active: location.pathname === "/experiences" },
+    { key: "create", label: "Create", icon: Plus, onClick: () => navigate("/create"), active: location.pathname === "/create" },
+    { key: "studio", label: "Studio", icon: Clapperboard, onClick: goStudio, active: location.pathname.startsWith("/studio/") },
+    { key: "profile", label: "Profile", icon: User, onClick: () => navigate("/account"), active: location.pathname === "/account" },
   ];
-  if (user?.is_admin) nav.push({ label: "Admin", to: "/admin" });
 
   const initial = (user?.name || user?.email || "L").charAt(0).toUpperCase();
 
@@ -40,20 +45,16 @@ export function Header({ dark = false, back = false }) {
         </button>
       </div>
 
-      <nav className="hidden md:flex items-center gap-1">
-        {nav.map((n) => {
-          const active = location.pathname === n.to;
-          return (
-            <button key={n.to} data-testid={`nav-${n.to.replace(/\//g, "") || "home"}`} onClick={() => navigate(n.to)}
-              className={`px-4 py-2 font-body text-sm rounded-full transition-colors ${active ? "text-lumiere-ink bg-lumiere-gold" : `${sub} hover:${txt}`}`}>
-              {n.label}
-            </button>
-          );
-        })}
+      <nav className="hidden md:flex items-center gap-1" data-testid="primary-nav">
+        {nav.map((n) => (
+          <button key={n.key} data-testid={`nav-${n.key}`} onClick={n.onClick}
+            className={`px-4 py-2 font-body text-sm rounded-full transition-colors ${n.active ? "text-lumiere-ink bg-lumiere-gold" : `${sub} hover:${txt}`}`}>
+            {n.label}
+          </button>
+        ))}
       </nav>
 
       <div className="flex items-center gap-3">
-        <LanguageToggle dark={dark} />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button data-testid="avatar-menu-button" className="w-9 h-9 rounded-full overflow-hidden border border-lumiere-gold/60 flex items-center justify-center bg-lumiere-gold/20">
@@ -70,15 +71,12 @@ export function Header({ dark = false, back = false }) {
               <p className="font-mono text-[0.65rem] text-lumiere-ink/50 truncate">{user?.email}</p>
             </div>
             <DropdownMenuSeparator />
-            <DropdownMenuItem data-testid="menu-account" onClick={() => navigate("/account")} className="cursor-pointer gap-2"><User size={15} /> {t("account")}</DropdownMenuItem>
-            <DropdownMenuItem data-testid="menu-pricing" onClick={() => navigate("/pricing")} className="cursor-pointer gap-2"><CreditCard size={15} /> {t("managePlan")}</DropdownMenuItem>
-            <DropdownMenuItem data-testid="menu-create-video" onClick={() => navigate("/create-video")} className="cursor-pointer gap-2"><Sparkles size={15} /> {t("createVideo")}</DropdownMenuItem>
-            <DropdownMenuItem data-testid="menu-social" onClick={() => navigate("/social")} className="cursor-pointer gap-2"><Sparkles size={15} /> Social Studio</DropdownMenuItem>
+            <DropdownMenuItem data-testid="menu-account" onClick={() => navigate("/account")} className="cursor-pointer gap-2"><User size={15} /> Profile</DropdownMenuItem>
             {user?.is_admin && (
               <DropdownMenuItem data-testid="menu-admin" onClick={() => navigate("/admin")} className="cursor-pointer gap-2"><User size={15} /> Admin</DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem data-testid="menu-signout" onClick={logout} className="cursor-pointer gap-2 text-red-600"><LogOut size={15} /> {t("signOut")}</DropdownMenuItem>
+            <DropdownMenuItem data-testid="menu-signout" onClick={logout} className="cursor-pointer gap-2 text-red-600"><LogOut size={15} /> Sign out</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

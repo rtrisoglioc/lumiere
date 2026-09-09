@@ -28,7 +28,6 @@ import video_editor
 import captions
 from auth import exchange_session, get_current_user, logout as do_logout
 from admin import admin_router
-from social import social_router
 from payments import payments_router
 from inserts_router import inserts_router
 
@@ -50,6 +49,12 @@ class ExperienceIn(BaseModel):
     title: str
     type: str = "travel"
     language: str = "en"
+    location_name: Optional[str] = None
+    location_lat: Optional[float] = None
+    location_lng: Optional[float] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    target_platform: str = "cinematic"
 
 class PlanIn(BaseModel):
     intent: str
@@ -242,7 +247,16 @@ async def create_experience(body: ExperienceIn, user: dict = Depends(get_current
         "type": body.type,
         "language": body.language,
         "visibility": "private",
+        "privacy": "private",
+        "phase": "before",
+        "location_name": body.location_name,
+        "location_lat": body.location_lat,
+        "location_lng": body.location_lng,
+        "start_date": body.start_date,
+        "end_date": body.end_date,
+        "target_platform": body.target_platform,
         "stage": "intent",
+        "status": "DRAFT",
         "intent": None,
         "plan": None,
         "missions": None,
@@ -1152,7 +1166,6 @@ async def startup():
 
 app.include_router(api)
 app.include_router(admin_router)
-app.include_router(social_router)
 app.include_router(payments_router)
 app.include_router(inserts_router)
 app.add_middleware(

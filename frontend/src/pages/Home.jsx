@@ -181,7 +181,6 @@ export default function Home() {
               {[
                 { k: "experiences", label: t("story") },
                 { k: "cuts", label: t("finalFilm") },
-                { k: "ai_generations", label: t("aiVideoGen") },
               ].map((row) => {
                 const val = usage[row.k] || 0; const lim = limits[row.k] || 1;
                 const pct = Math.min(100, Math.round((val / lim) * 100));
@@ -200,10 +199,10 @@ export default function Home() {
             </div>
           )}
 
-          <button data-testid="home-create-video" onClick={() => navigate("/create-video")}
-            className="w-full rounded-2xl border border-lumiere-iris/40 bg-lumiere-iris/5 p-6 text-left hover:bg-lumiere-iris/10 transition-colors">
-            <p className="label-mono text-lumiere-iris mb-1">{t("aiVideoGen")}</p>
-            <p className="font-display text-lg">{t("createVideo")}</p>
+          <button data-testid="home-create-video" onClick={() => navigate("/create")}
+            className="w-full rounded-2xl border border-lumiere-gold/40 bg-lumiere-gold/5 p-6 text-left hover:bg-lumiere-gold/10 transition-colors">
+            <p className="label-mono text-lumiere-gold mb-1">New story</p>
+            <p className="font-display text-lg">Start an experience</p>
           </button>
         </aside>
       </main>

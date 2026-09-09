@@ -278,3 +278,30 @@ LUMIÈRE turns real lived experiences into cinema through an agentic closed loop
 - VERIFIED: Recraft produced agency-quality 3D illustration (SHIMAYA/GET LOST), far better than Gemini; stored+served.
 - KNOWN ISSUE (next fix): long fal generations can exceed the k8s ingress ~100s timeout -> browser POST returns 504 though the image completes server-side. Needs async job + polling for the design endpoint. NOT yet e2e-tested via testing_agent.
 - Then B: verify Veo playback (DONE jobs have empty result_url; playback relies on /video/download/{id} proxy) + admin cost panel.
+
+
+---
+
+## v2.0 PIVOT — "Comando de Implementación v2.0" (2026-09, IN PROGRESS)
+Source: user artifact LUMIERE_Emergent_Build_Command_v2.md. Replaces Master Spec v1.0 on conflict. Execute block-by-block, report PASS/FAIL, don't advance until current block passes. Decisions logged in /app/DECISIONS.md, deferred items in /app/BACKLOG.md.
+
+### Product thesis (drives every UI decision)
+LUMIÈRE is the only system that accompanies all 3 phases of a real story: BEFORE (plan) → DURING (direct live capture) → AFTER (understand, evaluate, request missing shot, re-edit, learn). It closes the loop because it can send the human back to shoot. `<PhaseIndicator phase>` must be visible on every screen inside an Experience, and the phase must visibly REGRESS when the user taps GET THE SHOT.
+
+### Block 0 — ELIMINATE ✅ DONE (verified 2026-09-09)
+- Removed Social module (SocialStudio, SocialImageEditor, backend social.py/fal_images.py/image_overlay.py, social_router, admin Social tab/monitor/entitlement). Removed free-prompt video screen (CreateVideo). Removed legacy Dashboard.
+- D-02 Canva/canvas editor = N/A (never existed; no fabric/konva/canvas deps).
+- Primary nav = exactly 5: Home(/studio) · Experiences(/experiences) · Create(/create) · Studio(last exp / /experiences) · Profile(/account). Pricing/Admin hidden (no nav link). No dead 404s (retired routes → catch-all).
+- AC PASS: grep social/canvas terms in src = CLEAN; no canvas deps; nav=5; app compiles; backend clean.
+
+### Block 1 — DATA MODEL 🔶 STARTED
+- Experience now persists `phase="before"` + v2 fields (location_name/lat/lng, start_date/end_date, target_platform, status enum default DRAFT). Verified via curl. Mongo is schemaless → new collections (story_intents, story_beats, shot_missions, gaps, media_segments, cut_versions/EDL) will be created as their features are built. `provenance` NOT NULL on MediaAsset to be enforced in Block 4 upload.
+
+### REMAINING (next, in doc's priority order)
+- P0 **Block 4 (the heart)**: upload → Vision Agent (Gemini, exact prompt) segments → deterministic Story Completeness formula (code scores, AI classifies) → Gap detection (≤3, impact/effort) → SCR-061 Missing Shot (GET THE SHOT → phase regresses to `during`) → re-evaluate → Editor Agent EDL (exact prompt, NEVER include ai_previz) → deterministic FFmpeg render (3 bundled CC0 tracks) → conversational revision (NL→structured params→new child CutVersion, lineage v1→v2).
+- P0 **Block 2 (BEFORE)**: SCR-020 New Experience, SCR-021 Story Intent (8 mood chips max3, creator_presence slider), Director Agent POST /api/story/generate (exact prompt, 5-7 beats, 3 critical, deterministic 6-beat fallback), SCR-022/023, Cinematographer POST /api/shots/generate (8-12 missions, exact prompt), Golden Hour Engine (astral, deterministic, ideal_time_computed).
+- P0 **Block 3 (DURING)**: SCR-040 Live Director (one mission at a time), deterministic next-shot selection, live re-planning on SKIP of a critical beat, production progress bar, resume-in-place.
+- P1 **Block 2.8**: Veo previz → degraded to Gemini reference image, badge "AI REFERENCE", provenance="ai_previz", never in EDL.
+- P1 **Block 5**: Agent Trace SCR-095 (timestamp·agent·operation·duration_ms·status·confidence).
+- P1 **Block 10**: DEMO_MODE (preloaded /demo_assets, fallback_cut.mp4, cached agent responses, one-click reset).
+- Geocoding: Nominatim (UA LumiereStudio/1.0, 1 req/s, 400ms debounce, in-mem cache; fallback free-text + null latlng → generic golden-hour labels).
