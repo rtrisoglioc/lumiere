@@ -336,6 +336,7 @@ async def translate_story(exp_id: str, to: str = "es", user: dict = Depends(get_
     payload = {"title": (story or {}).get("title"), "premise": (story or {}).get("premise"),
                "beats": [{"beat_id": b["beat_id"], "label": b.get("label"), "purpose": b.get("purpose")} for b in beats],
                "shots": [{"shot_id": s.get("shot_id"), "action": s.get("action"),
+                          "shot_type": s.get("shot_type"), "movement": s.get("movement"),
                           "composition_note": s.get("composition_note"), "narrative_purpose": s.get("narrative_purpose")} for s in shots]}
     out, _ = await v2agents.translate_story(exp_id, payload, to)
     if isinstance(out, dict):
@@ -358,7 +359,7 @@ async def translate_story(exp_id: str, to: str = "es", user: dict = Depends(get_
         for ts in (out.get("shots") or []):
             sid = ts.get("shot_id")
             sset = {}
-            for f in ("action", "composition_note", "narrative_purpose"):
+            for f in ("action", "shot_type", "movement", "composition_note", "narrative_purpose"):
                 if ts.get(f):
                     sset[f] = _flat(ts[f])
             if sid and sset:

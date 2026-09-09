@@ -16,6 +16,17 @@ const MOODS = ["curious", "free", "elegant", "warm", "energetic", "intimate", "n
 const PRESENCE = ["none", "minimal", "balanced", "protagonist"];
 const STYLES = ["cinematic", "social", "story"];
 const g = (v) => (v && typeof v === "object" ? v.en || v.es || "" : v || "");
+const WIN_LABEL = {
+  golden_hour_am: { en: "Golden hour · AM", es: "Hora dorada · mañana" },
+  golden_hour_pm: { en: "Golden hour · PM", es: "Hora dorada · tarde" },
+  morning: { en: "Morning", es: "Mañana" },
+  midday: { en: "Midday", es: "Mediodía" },
+  afternoon: { en: "Afternoon", es: "Tarde" },
+  blue_hour: { en: "Blue hour", es: "Hora azul" },
+  night: { en: "Night", es: "Noche" },
+  any: { en: "Any time", es: "Cualquier hora" },
+};
+const winLabel = (w, lang) => { const k = (w || "").toLowerCase(); return WIN_LABEL[k] ? (lang === "es" ? WIN_LABEL[k].es : WIN_LABEL[k].en) : (w || ""); };
 const cov = { covered: "text-lumiere-sage border-lumiere-sage/50", partial: "text-lumiere-gold border-lumiere-gold/50", empty: "text-lumiere-ink/40 border-lumiere-ink/15" };
 
 export default function Experience() {
@@ -269,17 +280,17 @@ export default function Experience() {
                   <div className="grid sm:grid-cols-2 gap-3" data-testid="shots-list">
                     {shots.map((s) => (
                       <div key={s.shot_id} data-testid={`shot-${s.shot_id}`} className="group relative rounded-xl border border-black/10 bg-lumiere-warm p-4">
-                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                        <div className="absolute top-2 right-2 flex gap-1 opacity-100 transition-all">
                           <button data-testid={`edit-shot-${s.shot_id}`} onClick={() => startEditShot(s)} title={lang === "es" ? "Editar" : "Edit"}
-                            className="w-6 h-6 flex items-center justify-center rounded-full bg-black/5 text-lumiere-ink/50 hover:bg-lumiere-ink hover:text-white transition-colors">
+                            className="w-6 h-6 flex items-center justify-center rounded-full bg-black/10 text-lumiere-ink/60 hover:bg-lumiere-ink hover:text-white transition-colors">
                             <Pencil size={12} />
                           </button>
-                          <button data-testid={`regen-shot-${s.shot_id}`} onClick={() => regenShot(s.shot_id)} disabled={regenShotId === s.shot_id} title={lang === "es" ? "Regenerar con IA" : "Regenerate with AI"}
-                            className="w-6 h-6 flex items-center justify-center rounded-full bg-black/5 text-lumiere-iris hover:bg-lumiere-iris hover:text-white transition-colors">
+                          <button data-testid={`regen-shot-${s.shot_id}`} onClick={() => regenShot(s.shot_id)} disabled={regenShotId === s.shot_id} title={lang === "es" ? "Actualizar con IA" : "Update with AI"}
+                            className="w-6 h-6 flex items-center justify-center rounded-full bg-lumiere-iris/10 text-lumiere-iris hover:bg-lumiere-iris hover:text-white transition-colors">
                             {regenShotId === s.shot_id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
                           </button>
                           <button data-testid={`delete-shot-${s.shot_id}`} onClick={() => deleteShot(s.shot_id)} title={lang === "es" ? "Eliminar toma" : "Remove shot"}
-                            className="w-6 h-6 flex items-center justify-center rounded-full bg-black/5 text-lumiere-ink/40 hover:bg-red-600 hover:text-white transition-colors">
+                            className="w-6 h-6 flex items-center justify-center rounded-full bg-black/10 text-lumiere-ink/50 hover:bg-red-600 hover:text-white transition-colors">
                             <Trash2 size={12} />
                           </button>
                         </div>
@@ -300,7 +311,7 @@ export default function Experience() {
                           <p className="text-sm mt-1">{g(s.action)}</p>
                         )}
                         <div className="flex items-center gap-2 mt-2 text-lumiere-gold">
-                          <Clock size={12} /><span className="font-mono text-[0.6rem] uppercase tracking-widest">{s.ideal_time_label ? `Golden · ${s.ideal_time_label}` : s.ideal_time_window}</span>
+                          <Clock size={12} /><span className="font-mono text-[0.6rem] uppercase tracking-widest">{s.ideal_time_label ? `${winLabel(s.ideal_time_window, lang)} · ${s.ideal_time_label}` : winLabel(s.ideal_time_window, lang)}</span>
                         </div>
                         {previz[s.shot_id]?.ok && previz[s.shot_id]?.previz_path ? (
                           <div className="relative mt-2 rounded-lg overflow-hidden" data-testid={`previz-img-${s.shot_id}`}>

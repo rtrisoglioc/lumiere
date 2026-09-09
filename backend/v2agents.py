@@ -292,9 +292,9 @@ async def story_ideas(exp):
 
 TRANSLATE_SYS = """You are a professional translator. Translate ONLY the human-readable text
 fields into the target language: title, premise, and for each beat (label, purpose)
-and for each shot (action, composition_note, narrative_purpose). Keep beat_id and
-shot_id values EXACTLY unchanged. Preserve tone and structure. Return ONLY the same
-JSON structure you received (with the same keys, including the beats and shots arrays)."""
+and for each shot (action, shot_type, movement, composition_note, narrative_purpose).
+Keep beat_id and shot_id values EXACTLY unchanged. Preserve tone and structure. Return
+ONLY the same JSON structure you received (with the same keys, including the beats and shots arrays)."""
 
 
 CINE_ONE_SYS = """You are the Cinematographer Agent of LUMIÈRE.
