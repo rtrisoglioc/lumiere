@@ -329,3 +329,9 @@ Order requested by user: DEMO_MODE → title cards → previz → geocoding. All
 ### STILL REMAINING (optional polish)
 - SCR-020/021/022/023 as separate onboarding screens (currently unified in workspace Before tab; onboarding ≤3 steps satisfied).
 - Real Veo (swap previz Gemini→Veo when Cloud Run gateway /video is redeployed).
+
+### Final batch (2026-09-09) — Share Film + Session expiry + Demo scaffold. CODE FROZEN.
+- **Session expiry = 1 hour** (auth.py SESSION_TTL=1h; cookie max_age=3600; expiry already enforced in get_current_user → 401). Frontend api.js response interceptor auto-logs-out on 401 (excludes /auth/me probe + public routes /,/login,/share). Verified: valid token=200, expired=401.
+- **Share Film — PASS**: POST /api/v2/cuts/{id}/share (creates share_id + ffmpeg poster). Public (no-auth) public_router: GET /api/public/cuts/{share_id} (meta), /video (range), /poster. Frontend: Share button + copyable link on each cut; public page /share/:shareId (Share.jsx, outside Protected). Verified E2E incl. browser render.
+- **Demo scaffold — WAITING ON REAL CLIPS**: /app/demo_assets/ (README added). demo/load-footage reads REAL clips from that folder (NO synthesized bars); returns a hint if empty. GET demo/config reports demo_assets_ready. Render fail-safe uses /app/demo_assets/fallback_cut.mp4 ONLY if present. TODO once user drops clips: wire the seeded Lisbon demo experience.
+- OUT OF SCOPE per user: Veo Real, separate Onboarding Screens.

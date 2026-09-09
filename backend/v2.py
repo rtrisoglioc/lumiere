@@ -13,7 +13,7 @@ import tempfile
 import subprocess
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks, Request, Response
 from pydantic import BaseModel
 
 from db import db, now_iso
@@ -28,10 +28,11 @@ import v2agents
 
 logger = logging.getLogger("lumiere")
 v2_router = APIRouter(prefix="/api/v2")
+public_router = APIRouter(prefix="/api/public")
 
 STYLE_TARGET = {"cinematic": (45, "dissolve"), "social": (22, "cut"), "story": (55, "cut")}
 DEMO_MODE = (os.environ.get("DEMO_MODE") or "").lower() in ("1", "true", "yes")
-DEMO_CLIPS = [("testsrc2", 220), ("smptebars", 277), ("rgbtestsrc", 330), ("mandelbrot", 392)]
+DEMO_DIR = Path("/app/demo_assets")  # drop REAL sample clips + fallback_cut.mp4 here
 EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
 PREVIZ_IMAGE_MODEL = "gemini-3.1-flash-image-preview"
 
@@ -93,22 +94,17 @@ async def _set_phase(exp_id, phase, status=None):
 
 
 # ---------------- DEMO MODE (fail-safe live demo) ----------------
-def _synth(pattern, freq, dur, out):
-    subprocess.run(["ffmpeg", "-y", "-f", "lavfi", "-i", f"{pattern}=size=1280x720:rate=30:duration={dur}",
-                    "-f", "lavfi", "-i", f"sine=frequency={freq}:duration={dur}",
-                    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(out), "-loglevel", "error"],
-                   timeout=90)
-
-
 def _fallback_cut_bytes():
-    tmp = Path(tempfile.mkdtemp()) / "fallback.mp4"
-    _synth("testsrc2", 220, 18, tmp)
-    return tmp.read_bytes()
+    """Real, pre-rendered fallback film. Returns None until you drop a real clip
+    at /app/demo_assets/fallback_cut.mp4 — we never fabricate synthetic bars."""
+    fb = DEMO_DIR / "fallback_cut.mp4"
+    return fb.read_bytes() if fb.exists() else None
 
 
 @v2_router.get("/demo/config")
 async def demo_config():
-    return {"demo_mode": DEMO_MODE}
+    clips = sorted([p.name for p in DEMO_DIR.glob("*") if p.suffix.lower() in (".mp4", ".mov", ".webm", ".m4v")]) if DEMO_DIR.exists() else []
+    return {"demo_mode": DEMO_MODE, "demo_assets_ready": len(clips) > 0, "demo_clip_count": len(clips)}
 
 
 @v2_router.post("/experiences/{exp_id}/demo/load-footage")
@@ -116,27 +112,26 @@ async def demo_load(exp_id: str, user: dict = Depends(get_current_user)):
     if not DEMO_MODE:
         raise HTTPException(status_code=403, detail="demo_disabled")
     await _exp(exp_id, user)
+    clips = sorted([p for p in DEMO_DIR.glob("*") if p.suffix.lower() in (".mp4", ".mov", ".webm", ".m4v") and p.name != "fallback_cut.mp4"]) if DEMO_DIR.exists() else []
+    if not clips:
+        return {"ok": False, "loaded": 0, "message": "No demo clips yet — add real .mp4 files to /app/demo_assets/"}
     loaded = 0
-    for pat, freq in DEMO_CLIPS:
+    for src in clips:
         try:
-            tmp = Path(tempfile.mkdtemp()) / "c.mp4"
-            await asyncio.to_thread(_synth, pat, freq, 5, tmp)
-            if not tmp.exists() or tmp.stat().st_size == 0:
-                continue
-            data = tmp.read_bytes()
+            data = src.read_bytes()
             asset_id = str(uuid.uuid4())
-            local_name = f"{asset_id}.mp4"
+            local_name = f"{asset_id}{src.suffix.lower()}"
             path = f"{storage.APP_NAME}/originals/{exp_id}/{local_name}"
-            put = await asyncio.to_thread(storage.put_object, path, data, "video/mp4")
-            info = fw.probe(str(tmp))
+            put = await asyncio.to_thread(storage.put_object, path, data, _MIME.get(src.suffix.lower().lstrip('.'), "video/mp4"))
+            info = fw.probe(str(src))
             await db.media_assets.insert_one({"id": asset_id, "asset_id": asset_id, "experience_id": exp_id,
                 "owner": user["user_id"], "storage_path": put["path"], "local_name": local_name,
-                "content_type": "video/mp4", "provenance": "human_captured", "linked_shot_id": None,
-                "duration": info.get("duration", 0), "has_audio": info.get("has_audio", False),
+                "content_type": _MIME.get(src.suffix.lower().lstrip('.'), "video/mp4"), "provenance": "human_captured",
+                "linked_shot_id": None, "duration": info.get("duration", 0), "has_audio": info.get("has_audio", False),
                 "orientation": "landscape", "kind": "video", "status": "uploaded", "created_at": now_iso()})
             loaded += 1
         except Exception as e:
-            logger.warning(f"demo clip {pat} failed: {e}")
+            logger.warning(f"demo clip {src.name} failed: {e}")
     return {"ok": True, "loaded": loaded}
 
 
@@ -585,9 +580,10 @@ async def build_film(exp_id: str, body: BuildIn, user: dict = Depends(get_curren
     music_id = out.get("music_track_id") if isinstance(out, dict) else None
     r = await _render_edl(exp, norm, style, music_id)
     if not r.get("ok"):
-        if DEMO_MODE:  # fail-safe: never a blank screen in front of the jury
+        fb = await asyncio.to_thread(_fallback_cut_bytes) if DEMO_MODE else None
+        if fb:  # fail-safe: use the REAL pre-rendered fallback film (never blank, never synthetic)
             await _trace(exp_id, "Render Worker", "ffmpeg_render_fallback", "FALLBACK", 0, 1.0)
-            r = {"ok": True, "bytes": await asyncio.to_thread(_fallback_cut_bytes), "clips": len(norm), "duration": 18.0}
+            r = {"ok": True, "bytes": fb, "clips": len(norm), "duration": 18.0}
         else:
             raise HTTPException(status_code=500, detail=f"render_failed:{r.get('error')}")
     cut_id = str(uuid.uuid4())
@@ -668,3 +664,84 @@ async def revise_cut(cut_id: str, body: ReviseIn, user: dict = Depends(get_curre
     await db.cut_versions.insert_one(dict(new_cut))
     new_cut.pop("_id", None)
     return {"cut": new_cut, "params": params}
+
+
+# ---------------- SHARE FILM (public link + poster) ----------------
+def _make_poster(video_bytes: bytes) -> bytes:
+    d = Path(tempfile.mkdtemp())
+    vid, poster = d / "v.mp4", d / "p.jpg"
+    vid.write_bytes(video_bytes)
+    subprocess.run(["ffmpeg", "-y", "-ss", "1", "-i", str(vid), "-frames:v", "1",
+                    "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2",
+                    str(poster), "-loglevel", "error"], timeout=60)
+    return poster.read_bytes() if poster.exists() else b""
+
+
+def _serve(data: bytes, ct: str, range_header: str = None):
+    total = len(data)
+    if range_header and range_header.startswith("bytes="):
+        try:
+            s, _, e = range_header[6:].partition("-")
+            start = int(s) if s else 0
+            end = int(e) if e else total - 1
+            end = min(end, total - 1)
+            chunk = data[start:end + 1]
+            return Response(content=chunk, status_code=206, media_type=ct, headers={
+                "Content-Range": f"bytes {start}-{end}/{total}", "Accept-Ranges": "bytes",
+                "Content-Length": str(len(chunk))})
+        except Exception:
+            pass
+    return Response(content=data, media_type=ct, headers={"Accept-Ranges": "bytes", "Content-Length": str(total)})
+
+
+@v2_router.post("/cuts/{cut_id}/share")
+async def share_cut(cut_id: str, user: dict = Depends(get_current_user)):
+    cut = await db.cut_versions.find_one({"cut_id": cut_id, "owner": user["user_id"]}, {"_id": 0})
+    if not cut:
+        raise HTTPException(status_code=404, detail="cut_not_found")
+    share_id = cut.get("share_id") or uuid.uuid4().hex[:10]
+    update = {"share_id": share_id, "is_public": True}
+    if not cut.get("poster_path"):
+        try:
+            data = (await asyncio.to_thread(storage.get_object, cut["storage_path"]))[0]
+            poster = await asyncio.to_thread(_make_poster, data)
+            if poster:
+                pp = f"{storage.APP_NAME}/cuts/{cut['experience_id']}/{cut_id}_poster.jpg"
+                put = await asyncio.to_thread(storage.put_object, pp, poster, "image/jpeg")
+                update["poster_path"] = put["path"]
+        except Exception as e:
+            logger.warning(f"poster failed: {e}")
+    await db.cut_versions.update_one({"cut_id": cut_id}, {"$set": update})
+    return {"ok": True, "share_id": share_id, "share_path": f"/share/{share_id}"}
+
+
+@public_router.get("/cuts/{share_id}")
+async def public_cut(share_id: str):
+    cut = await db.cut_versions.find_one({"share_id": share_id, "is_public": True}, {"_id": 0})
+    if not cut:
+        raise HTTPException(status_code=404, detail="not_found")
+    story = await db.story_plans.find_one({"experience_id": cut["experience_id"]}, {"_id": 0})
+    return {"share_id": share_id, "title": (story or {}).get("title") or "A LUMIÈRE film",
+            "premise": (story or {}).get("premise"), "style": cut.get("style"),
+            "duration": round(cut.get("actual_duration", 0)), "created_at": cut.get("created_at"),
+            "video_url": f"/api/public/cuts/{share_id}/video",
+            "poster_url": f"/api/public/cuts/{share_id}/poster" if cut.get("poster_path") else None}
+
+
+@public_router.get("/cuts/{share_id}/video")
+async def public_video(share_id: str, request: Request):
+    cut = await db.cut_versions.find_one({"share_id": share_id, "is_public": True}, {"_id": 0})
+    if not cut:
+        raise HTTPException(status_code=404, detail="not_found")
+    data = (await asyncio.to_thread(storage.get_object, cut["storage_path"]))[0]
+    return _serve(data, "video/mp4", request.headers.get("range"))
+
+
+@public_router.get("/cuts/{share_id}/poster")
+async def public_poster(share_id: str):
+    cut = await db.cut_versions.find_one({"share_id": share_id, "is_public": True}, {"_id": 0})
+    if not cut or not cut.get("poster_path"):
+        raise HTTPException(status_code=404, detail="not_found")
+    data = (await asyncio.to_thread(storage.get_object, cut["poster_path"]))[0]
+    return _serve(data, "image/jpeg")
+

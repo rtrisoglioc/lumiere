@@ -30,7 +30,7 @@ from auth import exchange_session, get_current_user, logout as do_logout
 from admin import admin_router
 from payments import payments_router
 from inserts_router import inserts_router
-from v2 import v2_router
+from v2 import v2_router, public_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("lumiere")
@@ -211,7 +211,7 @@ async def render_cut_task(exp_id: str, cut_id: str):
 async def auth_session(body: SessionIn, response: Response):
     result = await exchange_session(body.session_id)
     response.set_cookie("session_token", result["session_token"], httponly=True, secure=True,
-                        samesite="none", path="/", max_age=7 * 24 * 3600)
+                        samesite="none", path="/", max_age=3600)
     return {"user": result["user"], "session_token": result["session_token"]}
 
 @api.get("/auth/me")
@@ -1174,6 +1174,7 @@ app.include_router(admin_router)
 app.include_router(payments_router)
 app.include_router(inserts_router)
 app.include_router(v2_router)
+app.include_router(public_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

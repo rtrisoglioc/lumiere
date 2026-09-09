@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   Loader2, Upload, Sparkles, Film, Wand2, ArrowRight, Check, SkipForward,
-  Clock, MapPin, AlertTriangle, Camera, RefreshCw, ChevronRight, Activity,
+  Clock, MapPin, AlertTriangle, Camera, RefreshCw, ChevronRight, Activity, Share2, Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, API, getToken } from "@/lib/api";
@@ -27,6 +27,7 @@ export default function Experience() {
   const [trace, setTrace] = useState(null);
   const [demo, setDemo] = useState(false);
   const [previz, setPreviz] = useState({});
+  const [shared, setShared] = useState({});
 
   // intent form
   const [feelings, setFeelings] = useState([]);
@@ -44,7 +45,7 @@ export default function Experience() {
   useEffect(() => { load(); }, [id]); // eslint-disable-line
   useEffect(() => { api.get(`/v2/demo/config`).then((r) => setDemo(r.data.demo_mode)).catch(() => {}); }, []);
 
-  const demoLoad = async () => { setBusy("demoload"); try { await api.post(`/v2/experiences/${id}/demo/load-footage`); await load(); setTab("after"); toast.success("Demo footage loaded"); } catch { toast.error("Failed"); } finally { setBusy(""); } };
+  const demoLoad = async () => { setBusy("demoload"); try { const r = await api.post(`/v2/experiences/${id}/demo/load-footage`); if (r.data.ok) { await load(); setTab("after"); toast.success(`Loaded ${r.data.loaded} demo clip(s)`); } else { toast.info(r.data.message || "No demo clips available yet"); } } catch { toast.error("Failed"); } finally { setBusy(""); } };
   const demoReset = async () => { setBusy("demoreset"); try { await api.post(`/v2/experiences/${id}/demo/reset`); await load(); toast.success("Demo reset"); } catch { toast.error("Failed"); } finally { setBusy(""); } };
 
   const exp = state?.experience;
@@ -99,6 +100,16 @@ export default function Experience() {
     setPreviz((p) => ({ ...p, [shotId]: { loading: true } }));
     try { const r = await api.post(`/v2/shots/${shotId}/previz`); setPreviz((p) => ({ ...p, [shotId]: r.data })); }
     catch { setPreviz((p) => ({ ...p, [shotId]: { degraded: true, caption: "This is the shot. Go get the real one." } })); }
+  };
+
+  const doShare = async (cutId) => {
+    setBusy("share");
+    try {
+      const r = await api.post(`/v2/cuts/${cutId}/share`);
+      const url = `${window.location.origin}/share/${r.data.share_id}`;
+      setShared((s) => ({ ...s, [cutId]: url }));
+      try { await navigator.clipboard.writeText(url); toast.success("Public link copied"); } catch { toast.success("Public link ready"); }
+    } catch { toast.error("Share failed"); } finally { setBusy(""); }
   };
 
   const fileUrl = (path) => `${API}/files/${path}?auth=${encodeURIComponent(getToken() || "")}`;
@@ -309,7 +320,17 @@ export default function Experience() {
                       <div className="flex items-center gap-2 px-4 py-2 border-b border-black/5">
                         <span className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/60">v{i + 1} · {cut.style} · {Math.round(cut.actual_duration)}s</span>
                         {cut.parent_cut_id && <span className="font-mono text-[0.55rem] text-lumiere-iris">↳ revision</span>}
+                        <button data-testid={`share-${cut.cut_id}`} onClick={() => doShare(cut.cut_id)} disabled={busy === "share"}
+                          className="ml-auto inline-flex items-center gap-1.5 border border-lumiere-ink/20 hover:border-lumiere-gold px-3 py-1 rounded-full font-mono text-[0.55rem] uppercase tracking-widest transition-colors">
+                          {busy === "share" ? <Loader2 size={11} className="animate-spin" /> : <Share2 size={11} />} Share
+                        </button>
                       </div>
+                      {shared[cut.cut_id] && (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-lumiere-gold/10" data-testid={`share-link-${cut.cut_id}`}>
+                          <input readOnly value={shared[cut.cut_id]} className="flex-1 bg-white border border-black/10 rounded px-2 py-1 font-mono text-[0.6rem]" />
+                          <button onClick={() => { navigator.clipboard?.writeText(shared[cut.cut_id]); toast.success("Copied"); }} className="text-lumiere-ink/60 hover:text-lumiere-ink"><Copy size={13} /></button>
+                        </div>
+                      )}
                       <video src={fileUrl(cut.storage_path)} controls className="w-full bg-black max-h-[380px]" data-testid={`cut-player-${cut.cut_id}`} />
                       <div className="p-4 flex gap-2">
                         <input data-testid="revise-input" value={revText} onChange={(e) => setRevText(e.target.value)} placeholder='e.g. "make it faster, less of me"'

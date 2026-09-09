@@ -8,7 +8,7 @@ from fastapi import Header, Cookie, HTTPException, Depends
 from db import db
 
 SESSION_DATA_URL = "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data"
-SESSION_DAYS = 7
+SESSION_TTL = timedelta(hours=1)  # sessions auto-expire after 1 hour
 
 
 def _admin_emails() -> set:
@@ -44,7 +44,7 @@ async def exchange_session(session_id: str) -> dict:
         })
 
     session_token = data.get("session_token") or uuid.uuid4().hex
-    expires_at = datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)
+    expires_at = datetime.now(timezone.utc) + SESSION_TTL
     await db.user_sessions.insert_one({
         "user_id": user_id,
         "session_token": session_token,

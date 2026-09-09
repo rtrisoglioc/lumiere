@@ -13,6 +13,7 @@ import Experience from "@/pages/Experience";
 import Account from "@/pages/Account";
 import Pricing from "@/pages/Pricing";
 import Admin from "@/pages/Admin";
+import Share from "@/pages/Share";
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -34,6 +35,7 @@ function AppRouter() {
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/share/:shareId" element={<Share />} />
       {/* HOME */}
       <Route path="/studio" element={<Protected><Home /></Protected>} />
       {/* EXPERIENCES */}
