@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   Loader2, Upload, Sparkles, Film, Wand2, ArrowRight, Check, SkipForward,
-  Clock, MapPin, AlertTriangle, Camera, RefreshCw, ChevronRight, Activity, Share2, Copy, Trash2, Pencil, X,
+  Clock, MapPin, AlertTriangle, Camera, RefreshCw, ChevronRight, Activity, Share2, Copy, Trash2, Pencil, X, Sliders,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, API, getToken } from "@/lib/api";
@@ -15,6 +15,13 @@ import { CircularScore } from "@/components/CircularScore";
 const MOODS = ["curious", "free", "elegant", "warm", "energetic", "intimate", "nostalgic", "bold"];
 const PRESENCE = ["none", "minimal", "balanced", "protagonist"];
 const STYLES = ["cinematic", "social", "story"];
+const EDIT_ASPECTS = [["16:9", "16:9"], ["9:16", "9:16"], ["1:1", "1:1"]];
+const EDIT_LOOKS = ["none", "cinematic", "warm", "cool", "bw", "vivid"];
+const EDIT_SPEEDS = [[0.5, "0.5×"], [1, "1×"], [1.5, "1.5×"], [2, "2×"]];
+const EDIT_SCENE_TR = ["dissolve", "fade", "fadeblack", "cut"];
+const EDIT_END_FADE = ["none", "fade", "fadeblack", "fadewhite"];
+const EDIT_TEXT_POS = ["top", "center", "bottom"];
+const EDIT_TEXT_SZ = ["small", "medium", "large"];
 const g = (v) => (v && typeof v === "object" ? v.en || v.es || "" : v || "");
 const WIN_LABEL = {
   golden_hour_am: { en: "Golden hour · AM", es: "Hora dorada · mañana" },
@@ -42,6 +49,20 @@ export default function Experience() {
   const [demo, setDemo] = useState(false);
   const [previz, setPreviz] = useState({});
   const [shared, setShared] = useState({});
+  const EDIT_DEFAULTS = { aspect: "16:9", look: "none", speed: 1, scene_transition: "dissolve", end_fade: "none", text_enabled: false, text_content: "", text_position: "bottom", text_size: "medium" };
+  const [editCutId, setEditCutId] = useState(null);
+  const [editOpts, setEditOpts] = useState(EDIT_DEFAULTS);
+  const [editBusy, setEditBusy] = useState(false);
+  const openEditor = (cut) => { setEditCutId(cut.cut_id); setEditOpts({ ...EDIT_DEFAULTS, text_content: (story?.title || "") }); };
+  const applyEdit = async () => {
+    setEditBusy(true);
+    try {
+      await api.post(`/v2/cuts/${editCutId}/edit`, editOpts);
+      setEditCutId(null); await load();
+      toast.success(lang === "es" ? "Nueva versión creada" : "New version created");
+    } catch { toast.error(lang === "es" ? "Falló la edición" : "Edit failed"); }
+    finally { setEditBusy(false); }
+  };
 
   // intent form
   const [feelings, setFeelings] = useState([]);
@@ -431,10 +452,16 @@ export default function Experience() {
                       <div className="flex items-center gap-2 px-4 py-2 border-b border-black/5">
                         <span className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/60">v{i + 1} · {cut.style} · {Math.round(cut.actual_duration)}s</span>
                         {cut.parent_cut_id && <span className="font-mono text-[0.55rem] text-lumiere-iris">↳ {s("revision", "revisión")}</span>}
-                        <button data-testid={`share-${cut.cut_id}`} onClick={() => doShare(cut.cut_id)} disabled={busy === "share"}
-                          className="ml-auto inline-flex items-center gap-1.5 border border-lumiere-ink/20 hover:border-lumiere-gold px-3 py-1 rounded-full font-mono text-[0.55rem] uppercase tracking-widest transition-colors">
-                          {busy === "share" ? <Loader2 size={11} className="animate-spin" /> : <Share2 size={11} />} {s("Share", "Compartir")}
-                        </button>
+                        <div className="ml-auto flex gap-2">
+                          <button data-testid={`edit-cut-${cut.cut_id}`} onClick={() => openEditor(cut)}
+                            className="inline-flex items-center gap-1.5 border border-lumiere-iris/40 text-lumiere-iris hover:bg-lumiere-iris/10 px-3 py-1 rounded-full font-mono text-[0.55rem] uppercase tracking-widest transition-colors">
+                            <Sliders size={11} /> {s("Edit", "Editar")}
+                          </button>
+                          <button data-testid={`share-${cut.cut_id}`} onClick={() => doShare(cut.cut_id)} disabled={busy === "share"}
+                            className="inline-flex items-center gap-1.5 border border-lumiere-ink/20 hover:border-lumiere-gold px-3 py-1 rounded-full font-mono text-[0.55rem] uppercase tracking-widest transition-colors">
+                            {busy === "share" ? <Loader2 size={11} className="animate-spin" /> : <Share2 size={11} />} {s("Share", "Compartir")}
+                          </button>
+                        </div>
                       </div>
                       {shared[cut.cut_id] && (
                         <div className="flex items-center gap-2 px-4 py-2 bg-lumiere-gold/10" data-testid={`share-link-${cut.cut_id}`}>
@@ -484,6 +511,78 @@ export default function Experience() {
           )}
         </div>
       </main>
+
+      {editCutId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" data-testid="cut-editor-modal" onClick={() => !editBusy && setEditCutId(null)}>
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-lumiere-ivory border border-black/10 p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display text-2xl">{s("Edit film", "Editar película")}</h3>
+              <button data-testid="cut-editor-close" onClick={() => setEditCutId(null)} className="text-lumiere-ink/50 hover:text-lumiere-ink"><X size={18} /></button>
+            </div>
+            {(() => {
+              const Group = ({ label, children }) => (
+                <div className="mb-4">
+                  <p className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/50 mb-2">{label}</p>
+                  <div className="flex flex-wrap gap-2">{children}</div>
+                </div>
+              );
+              const pill = (active, onClick, key, content, testid) => (
+                <button key={key} data-testid={testid} onClick={onClick}
+                  className={`px-3 py-1.5 rounded-full font-mono text-[0.6rem] uppercase tracking-widest border transition-colors capitalize ${active ? "border-lumiere-iris bg-lumiere-iris/15 text-lumiere-ink" : "border-black/15 text-lumiere-ink/55 hover:text-lumiere-ink"}`}>{content}</button>
+              );
+              const set = (k, v) => setEditOpts((o) => ({ ...o, [k]: v }));
+              const looksES = { none: "Ninguno", cinematic: "Cine", warm: "Cálido", cool: "Frío", bw: "B/N", vivid: "Vívido" };
+              const trES = { dissolve: "Disolvencia", fade: "Fundido", fadeblack: "A negro", cut: "Corte", fadewhite: "A blanco", none: "Ninguno" };
+              const posES = { top: "Arriba", center: "Centro", bottom: "Abajo" };
+              const szES = { small: "Pequeño", medium: "Mediano", large: "Grande" };
+              return (
+                <>
+                  <Group label={s("Format / orientation", "Formato / orientación")}>
+                    {EDIT_ASPECTS.map(([v, lbl]) => pill(editOpts.aspect === v, () => set("aspect", v), v, lbl, `edit-aspect-${v}`))}
+                  </Group>
+                  <Group label={s("Color effect", "Efecto de color")}>
+                    {EDIT_LOOKS.map((v) => pill(editOpts.look === v, () => set("look", v), v, lang === "es" ? looksES[v] : v, `edit-look-${v}`))}
+                  </Group>
+                  <Group label={s("Speed", "Velocidad")}>
+                    {EDIT_SPEEDS.map(([v, lbl]) => pill(editOpts.speed === v, () => set("speed", v), v, lbl, `edit-speed-${v}`))}
+                  </Group>
+                  <Group label={s("Scene transition (multi-clip)", "Transición de escenas (multi-clip)")}>
+                    {EDIT_SCENE_TR.map((v) => pill(editOpts.scene_transition === v, () => set("scene_transition", v), v, lang === "es" ? trES[v] : v, `edit-scenetr-${v}`))}
+                  </Group>
+                  <Group label={s("Ending fade", "Fundido final")}>
+                    {EDIT_END_FADE.map((v) => pill(editOpts.end_fade === v, () => set("end_fade", v), v, lang === "es" ? trES[v] : v, `edit-endfade-${v}`))}
+                  </Group>
+                  <div className="mb-4 border-t border-black/10 pt-4">
+                    <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                      <input type="checkbox" data-testid="edit-text-toggle" checked={editOpts.text_enabled} onChange={(e) => set("text_enabled", e.target.checked)} className="accent-lumiere-iris" />
+                      <span className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/60">{s("Title text", "Texto del título")}</span>
+                    </label>
+                    {editOpts.text_enabled && (
+                      <div className="space-y-2">
+                        <input data-testid="edit-text-content" value={editOpts.text_content} onChange={(e) => set("text_content", e.target.value)}
+                          placeholder={s("Your title", "Tu título")} className="w-full bg-white border border-black/15 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-lumiere-iris" />
+                        <div className="flex flex-wrap gap-2">
+                          {EDIT_TEXT_POS.map((v) => pill(editOpts.text_position === v, () => set("text_position", v), v, lang === "es" ? posES[v] : v, `edit-textpos-${v}`))}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {EDIT_TEXT_SZ.map((v) => pill(editOpts.text_size === v, () => set("text_size", v), v, lang === "es" ? szES[v] : v, `edit-textsz-${v}`))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-2 justify-end border-t border-black/10 pt-4">
+                    <button onClick={() => setEditCutId(null)} disabled={editBusy} className="px-4 py-2 rounded-full border border-black/15 text-lumiere-ink/60 font-mono text-xs uppercase tracking-widest">{s("Cancel", "Cancelar")}</button>
+                    <button data-testid="edit-apply" onClick={applyEdit} disabled={editBusy}
+                      className="inline-flex items-center gap-2 bg-lumiere-iris text-white hover:bg-lumiere-irisHover px-5 py-2 rounded-full font-mono text-xs uppercase tracking-widest transition-colors disabled:opacity-60">
+                      {editBusy ? <Loader2 size={14} className="animate-spin" /> : <Sliders size={14} />} {editBusy ? s("Rendering…", "Renderizando…") : s("Apply", "Aplicar")}
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

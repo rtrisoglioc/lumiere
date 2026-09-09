@@ -85,8 +85,8 @@ def _drawtext(title: str) -> str:
         return ""
     font = "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf"
     fontpart = f"fontfile={font}:" if Path(font).exists() else ""
-    return (f",drawtext={fontpart}text='{safe}':fontsize=52:fontcolor=white:"
-            f"box=1:boxcolor=black@0.45:boxborderw=18:x=(w-text_w)/2:y=h-190:"
+    return (f",drawtext={fontpart}text='{safe}':fontsize=34:fontcolor=white:"
+            f"box=1:boxcolor=black@0.45:boxborderw=12:x=(w-text_w)/2:y=h-140:"
             f"alpha='min(1,max(0,(t-0.3)*2))'")
 
 

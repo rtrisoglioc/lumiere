@@ -25,6 +25,7 @@ import music
 import sun_time
 import completeness as comp
 import v2agents
+import video_editor as ve
 
 logger = logging.getLogger("lumiere")
 v2_router = APIRouter(prefix="/api/v2")
@@ -69,6 +70,20 @@ class BeatEdit(BaseModel):
 class ShotEdit(BaseModel):
     action: str = None
     composition_note: str = None
+
+
+class CutEditIn(BaseModel):
+    aspect: str = "16:9"          # 16:9 | 9:16 | 1:1
+    look: str = "none"           # none | cinematic | warm | cool | bw | vivid
+    speed: float = 1.0           # 0.25 .. 4.0
+    scene_transition: str = None  # cut | fade | fadeblack | dissolve  (re-renders from EDL)
+    transition_dur: float = 0.5
+    end_fade: str = "none"       # none | fade | fadeblack | fadewhite  (whole-film)
+    music_volume: float = 0.85
+    text_enabled: bool = False
+    text_content: str = ""
+    text_position: str = "bottom"  # top | center | bottom
+    text_size: str = "medium"      # small | medium | large
 
 
 class ShotStatusIn(BaseModel):
@@ -673,7 +688,7 @@ def _resolver_factory(exp_id, assets_by_id):
     return resolver
 
 
-async def _render_edl(exp, clips, style, music_track_id):
+async def _render_edl(exp, clips, style, music_track_id, transition=None, tdur=0.5):
     assets = await db.media_assets.find({"experience_id": exp["id"]}, {"_id": 0}).to_list(200)
     by_id = {a["asset_id"]: a for a in assets}
     # HARD RULE: never render ai_previz footage.
@@ -684,10 +699,10 @@ async def _render_edl(exp, clips, style, music_track_id):
         return {"ok": False, "error": "no_valid_clips"}
     tmp = Path(tempfile.mkdtemp())
     out_path = tmp / f"cut_{uuid.uuid4().hex[:8]}.mp4"
-    transition = STYLE_TARGET.get(style, ("", "dissolve"))[1]
+    transition = transition or STYLE_TARGET.get(style, ("", "dissolve"))[1]
     t0 = time.monotonic()
     r = await asyncio.to_thread(fw.render_cut_with_transitions, render_clips,
-                                _resolver_factory(exp["id"], by_id), tmp, out_path, transition, 0.5)
+                                _resolver_factory(exp["id"], by_id), tmp, out_path, transition, tdur)
     if not r.get("ok"):
         await _trace(exp["id"], "Render Worker", "ffmpeg_render", "FAILED", int((time.monotonic() - t0) * 1000))
         return r
@@ -758,6 +773,77 @@ async def build_film(exp_id: str, body: BuildIn, user: dict = Depends(get_curren
     await _set_phase(exp_id, "after", "COMPLETE")
     cut.pop("_id", None)
     return cut
+
+
+_LOOK = {"none", "cinematic", "warm", "cool", "bw", "vivid"}
+_ASPECT = {"16:9", "9:16", "1:1"}
+_SCENE_TR = {"cut", "fade", "fadeblack", "dissolve", "smooth"}
+_TEXT_SIZE = {"small": 0.045, "medium": 0.065, "large": 0.09}
+
+
+@v2_router.post("/cuts/{cut_id}/edit")
+async def edit_cut(cut_id: str, body: CutEditIn, user: dict = Depends(get_current_user)):
+    cut = await db.cut_versions.find_one({"cut_id": cut_id}, {"_id": 0})
+    if not cut:
+        raise HTTPException(status_code=404, detail="cut_not_found")
+    exp = await _exp(cut["experience_id"], user)
+    tmp = Path(tempfile.mkdtemp())
+
+    # 1) Base video: optionally re-render from the stored EDL with a new SCENE transition.
+    base_path = tmp / "base.mp4"
+    edl = (cut.get("edl_json") or {})
+    clips = edl.get("clips") or []
+    scene_tr = body.scene_transition if body.scene_transition in _SCENE_TR else None
+    if scene_tr and len(clips) >= 2:
+        r = await _render_edl(exp, clips, cut.get("style") or "cinematic", edl.get("music_track_id"),
+                              transition=scene_tr, tdur=max(0.1, min(1.5, body.transition_dur)))
+        if r.get("ok"):
+            base_path.write_bytes(r["bytes"])
+        else:
+            base_path = None
+    if base_path is None or not base_path.exists():
+        # use the current rendered cut as the base
+        local = storage.ensure_local(exp["id"], "cuts", f"{cut_id}.mp4", cut["storage_path"])
+        base_path = Path(local)
+
+    # 2) transform_video pass: aspect / color look / speed / end-fade / text overlay.
+    out_path = tmp / f"edit_{uuid.uuid4().hex[:8]}.mp4"
+    opts = {
+        "aspect": body.aspect if body.aspect in _ASPECT else "16:9",
+        "filter": body.look if body.look in _LOOK else "none",
+        "speed": max(0.25, min(4.0, float(body.speed or 1.0))),
+        "transition": body.end_fade if body.end_fade in ("fade", "fadeblack", "fadewhite") else "none",
+        "transition_dur": body.transition_dur,
+        "music_volume": body.music_volume,
+        "text_overlay": {
+            "enabled": bool(body.text_enabled and (body.text_content or "").strip()),
+            "content": (body.text_content or "").strip(),
+            "position": body.text_position if body.text_position in ("top", "center", "bottom") else "bottom",
+            "size": _TEXT_SIZE.get(body.text_size, 0.065),
+        },
+    }
+    t0 = time.monotonic()
+    try:
+        await asyncio.to_thread(ve.transform_video, str(base_path), str(out_path), opts)
+    except Exception as e:
+        await _trace(exp["id"], "Render Worker", "cut_edit", "FAILED", int((time.monotonic() - t0) * 1000))
+        raise HTTPException(status_code=500, detail=f"edit_failed:{str(e)[:150]}")
+    await _trace(exp["id"], "Render Worker", "cut_edit", "OK", int((time.monotonic() - t0) * 1000))
+
+    data = out_path.read_bytes()
+    new_id = str(uuid.uuid4())
+    path = f"{storage.APP_NAME}/cuts/{exp['id']}/{new_id}.mp4"
+    put = await asyncio.to_thread(storage.put_object, path, data, "video/mp4")
+    new_cut = {"cut_id": new_id, "id": new_id, "experience_id": exp["id"], "owner": user["user_id"],
+               "story_id": cut.get("story_id"), "parent_cut_id": cut_id, "style": cut.get("style"),
+               "target_duration": cut.get("target_duration"),
+               "actual_duration": fw.probe(str(out_path)).get("duration", 0),
+               "edl_json": edl, "edit_opts": body.dict(),
+               "storage_path": put["path"], "content_type": "video/mp4", "clips": cut.get("clips"),
+               "kind": "edit", "status": "ready", "created_at": now_iso()}
+    await db.cut_versions.insert_one(dict(new_cut))
+    new_cut.pop("_id", None)
+    return new_cut
 
 
 def _apply_revision(clips, params, seg_by_id):
