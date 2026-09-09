@@ -1,12 +1,20 @@
 import { Compass, Radio, Clapperboard } from "lucide-react";
+import { useI18n } from "@/i18n";
 
-const PHASES = [
-  { key: "before", label: "Before", sub: "Plan the story", icon: Compass, color: "lumiere-gold" },
-  { key: "during", label: "During", sub: "Direct the capture", icon: Radio, color: "lumiere-iris" },
-  { key: "after", label: "After", sub: "Understand & edit", icon: Clapperboard, color: "lumiere-sage" },
+const PHASES_EN = [
+  { key: "before", label: "Before", sub: "Plan the story", icon: Compass },
+  { key: "during", label: "During", sub: "Direct the capture", icon: Radio },
+  { key: "after", label: "After", sub: "Understand & edit", icon: Clapperboard },
+];
+const PHASES_ES = [
+  { key: "before", label: "Antes", sub: "Planea la historia", icon: Compass },
+  { key: "during", label: "Durante", sub: "Dirige la captura", icon: Radio },
+  { key: "after", label: "Después", sub: "Entiende y edita", icon: Clapperboard },
 ];
 
 export function PhaseIndicator({ phase = "before" }) {
+  const { lang } = useI18n();
+  const PHASES = lang === "es" ? PHASES_ES : PHASES_EN;
   const idx = PHASES.findIndex((p) => p.key === phase);
   return (
     <div className="flex items-center gap-1.5 sm:gap-3" data-testid="phase-indicator" data-phase={phase}>

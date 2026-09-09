@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, API, getToken } from "@/lib/api";
+import { useI18n } from "@/i18n";
 import { Header } from "@/components/Header";
 import { PhaseIndicator } from "@/components/PhaseIndicator";
 import { CircularScore } from "@/components/CircularScore";
@@ -19,6 +20,8 @@ const cov = { covered: "text-lumiere-sage border-lumiere-sage/50", partial: "tex
 
 export default function Experience() {
   const { id } = useParams();
+  const { lang } = useI18n();
+  const s = (en, es) => (lang === "es" ? es : en);
   const [state, setState] = useState(null);
   const [busy, setBusy] = useState("");
   const [tab, setTab] = useState(null);
@@ -140,8 +143,8 @@ export default function Experience() {
       <div className="sticky top-[64px] z-30 bg-lumiere-ivory/90 backdrop-blur border-b border-black/5 px-4 sm:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
         <PhaseIndicator phase={exp?.phase || "before"} />
         <div className="flex items-center gap-2">
-          {demo && <button data-testid="demo-reset" onClick={demoReset} disabled={busy === "demoreset"} className="inline-flex items-center gap-1.5 border border-lumiere-iris/40 text-lumiere-iris hover:bg-lumiere-iris/10 px-3 py-1.5 rounded-full font-mono text-[0.55rem] uppercase tracking-widest transition-colors">{busy === "demoreset" ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Reset demo</button>}
-          <Tab k="before" label="Before" /><Tab k="during" label="During" /><Tab k="after" label="After" />
+          {demo && <button data-testid="demo-reset" onClick={demoReset} disabled={busy === "demoreset"} className="inline-flex items-center gap-1.5 border border-lumiere-iris/40 text-lumiere-iris hover:bg-lumiere-iris/10 px-3 py-1.5 rounded-full font-mono text-[0.55rem] uppercase tracking-widest transition-colors">{busy === "demoreset" ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} {s("Reset demo", "Reiniciar demo")}</button>}
+          <Tab k="before" label={s("Before", "Antes")} /><Tab k="during" label={s("During", "Durante")} /><Tab k="after" label={s("After", "Después")} />
         </div>
       </div>
 
@@ -159,11 +162,11 @@ export default function Experience() {
           <div data-testid="phase-before-content" className="space-y-8">
             {!story ? (
               <div className="rounded-2xl border border-black/10 bg-lumiere-warm p-7 max-w-2xl" data-testid="intent-form">
-                <p className="font-mono text-xs uppercase tracking-widest text-lumiere-gold mb-1">Story Intent</p>
-                <h2 className="font-display text-2xl mb-4">What do you want this experience to feel like?</h2>
+                <p className="font-mono text-xs uppercase tracking-widest text-lumiere-gold mb-1">{s("Story Intent", "Intención de la historia")}</p>
+                <h2 className="font-display text-2xl mb-4">{s("What do you want this experience to feel like?", "¿Qué quieres que transmita esta experiencia?")}</h2>
                 <button data-testid="suggest-ideas" onClick={suggestIdeas} disabled={busy === "ideas"}
                   className="mb-4 inline-flex items-center gap-2 border border-lumiere-iris/40 text-lumiere-iris hover:bg-lumiere-iris/10 px-4 py-2 rounded-full font-mono text-[0.6rem] uppercase tracking-widest transition-colors">
-                  {busy === "ideas" ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />} Suggest ideas with AI
+                  {busy === "ideas" ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />} {s("Suggest ideas with AI", "Sugerir ideas con IA")}
                 </button>
                 {ideas.length > 0 && (
                   <div className="space-y-2 mb-5" data-testid="ideas-list">
@@ -180,30 +183,30 @@ export default function Experience() {
                 <div className="flex flex-wrap gap-2 mb-5">
                   {MOODS.map((m) => (
                     <button key={m} data-testid={`mood-${m}`} onClick={() => setFeelings((f) => f.includes(m) ? f.filter((x) => x !== m) : f.length < 3 ? [...f, m] : f)}
-                      className={`px-3.5 py-1.5 rounded-full font-mono text-[0.65rem] uppercase tracking-widest border transition-colors ${feelings.includes(m) ? "bg-lumiere-gold border-lumiere-gold text-lumiere-ink" : "border-black/15 text-lumiere-ink/60 hover:border-lumiere-gold"}`}>{m}</button>
+                      className={`px-3.5 py-1.5 rounded-full font-mono text-[0.65rem] uppercase tracking-widest border transition-colors ${feelings.includes(m) ? "bg-lumiere-gold border-lumiere-gold text-lumiere-ink" : "border-black/15 text-lumiere-ink/60 hover:border-lumiere-gold"}`}>{lang === "es" ? { curious: "Curiosa", free: "Libre", elegant: "Elegante", warm: "Cálida", energetic: "Enérgica", intimate: "Íntima", nostalgic: "Nostálgica", bold: "Audaz" }[m] : m}</button>
                   ))}
                 </div>
-                <textarea data-testid="intent-freetext" value={freeText} onChange={(e) => setFreeText(e.target.value)} rows={2} placeholder="Optional: a sentence about the story you want…"
+                <textarea data-testid="intent-freetext" value={freeText} onChange={(e) => setFreeText(e.target.value)} rows={2} placeholder={s("Optional: a sentence about the story you want…", "Opcional: una frase sobre la historia que quieres…")}
                   className="w-full bg-white border border-black/15 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-lumiere-gold resize-none mb-4" />
                 <div className="mb-5">
-                  <label className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/50 block mb-2">Creator presence</label>
+                  <label className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/50 block mb-2">{s("Creator presence", "Presencia del creador")}</label>
                   <div className="flex gap-2">
                     {PRESENCE.map((p) => (
                       <button key={p} data-testid={`presence-${p}`} onClick={() => setPresence(p)}
-                        className={`px-3 py-1.5 rounded-full font-mono text-[0.6rem] uppercase tracking-widest border capitalize transition-colors ${presence === p ? "bg-lumiere-iris border-lumiere-iris text-white" : "border-black/15 text-lumiere-ink/60"}`}>{p}</button>
+                        className={`px-3 py-1.5 rounded-full font-mono text-[0.6rem] uppercase tracking-widest border capitalize transition-colors ${presence === p ? "bg-lumiere-iris border-lumiere-iris text-white" : "border-black/15 text-lumiere-ink/60"}`}>{lang === "es" ? { none: "Ninguna", minimal: "Mínima", balanced: "Equilibrada", protagonist: "Protagonista" }[p] : p}</button>
                     ))}
                   </div>
                 </div>
                 <button data-testid="create-story-button" onClick={doIntentStory} disabled={busy === "story"}
                   className="inline-flex items-center gap-2 bg-lumiere-ink text-lumiere-ivory hover:bg-lumiere-ink/85 disabled:opacity-50 px-6 py-3 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">
-                  {busy === "story" ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} Create my story
+                  {busy === "story" ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} {s("Create my story", "Crear mi historia")}
                 </button>
-                {busy === "story" && <p className="text-sm text-lumiere-ink/50 mt-3 animate-pulse">Understanding your intent… Building the arc… Planning the moments…</p>}
+                {busy === "story" && <p className="text-sm text-lumiere-ink/50 mt-3 animate-pulse">{s("Understanding your intent… Building the arc… Planning the moments…", "Entendiendo tu intención… Construyendo el arco… Planeando los momentos…")}</p>}
               </div>
             ) : (
               <>
                 <div>
-                  <p className="font-mono text-xs uppercase tracking-widest text-lumiere-ink/50 mb-3">Story arc · {beats.length} beats</p>
+                  <p className="font-mono text-xs uppercase tracking-widest text-lumiere-ink/50 mb-3">{s("Story arc", "Arco narrativo")} · {beats.length} {s("beats", "beats")}</p>
                   <div className="flex gap-3 overflow-x-auto pb-3" data-testid="beats-strip">
                     {beats.map((b) => (
                       <div key={b.beat_id} data-testid={`beat-${b.sequence}`} className="min-w-[220px] rounded-xl border border-black/10 bg-lumiere-warm p-4">
@@ -221,7 +224,7 @@ export default function Experience() {
 
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <p className="font-mono text-xs uppercase tracking-widest text-lumiere-ink/50">Shot list · {shots.length}</p>
+                    <p className="font-mono text-xs uppercase tracking-widest text-lumiere-ink/50">{s("Shot list", "Lista de tomas")} · {shots.length}</p>
                     <button data-testid="regen-shots" onClick={genShots} disabled={busy === "shots"} className="text-lumiere-ink/50 hover:text-lumiere-ink"><RefreshCw size={14} className={busy === "shots" ? "animate-spin" : ""} /></button>
                   </div>
                   <div className="grid sm:grid-cols-2 gap-3" data-testid="shots-list">
@@ -248,14 +251,14 @@ export default function Experience() {
                         ) : (
                           <button data-testid={`previz-${s.shot_id}`} onClick={() => doPreviz(s.shot_id)} disabled={previz[s.shot_id]?.loading}
                             className="mt-2 inline-flex items-center gap-1.5 border border-lumiere-iris/30 text-lumiere-iris hover:bg-lumiere-iris/10 px-2.5 py-1 rounded-full font-mono text-[0.55rem] uppercase tracking-widest transition-colors">
-                            {previz[s.shot_id]?.loading ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />} {previz[s.shot_id]?.degraded ? "Preview unavailable" : "Preview shot"}
+                            {previz[s.shot_id]?.loading ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />} {previz[s.shot_id]?.degraded ? (lang === "es" ? "Vista previa no disponible" : "Preview unavailable") : (lang === "es" ? "Previsualizar toma" : "Preview shot")}
                           </button>
                         )}
                       </div>
                     ))}
                   </div>
                   <button data-testid="go-capture" onClick={() => setTab("during")} className="mt-5 inline-flex items-center gap-2 bg-lumiere-iris text-white hover:bg-lumiere-irisHover px-5 py-2.5 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">
-                    <Camera size={14} /> Start directing
+                    <Camera size={14} /> {s("Start directing", "Empezar a dirigir")}
                   </button>
                 </div>
               </>
@@ -272,17 +275,17 @@ export default function Experience() {
             <div className="rounded-2xl border border-black/10 bg-lumiere-warm p-6">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
-                  <p className="font-mono text-xs uppercase tracking-widest text-lumiere-ink/50 mb-1">Footage · {assets.length} clip(s)</p>
-                  <p className="text-sm text-lumiere-ink/55">Upload what you captured. LUMIÈRE analyzes it against your story.</p>
+                  <p className="font-mono text-xs uppercase tracking-widest text-lumiere-ink/50 mb-1">{s("Footage", "Material")} · {assets.length} {s("clip(s)", "clip(s)")}</p>
+                  <p className="text-sm text-lumiere-ink/55">{s("Upload what you captured. LUMIÈRE analyzes it against your story.", "Sube lo que capturaste. LUMIÈRE lo analiza contra tu historia.")}</p>
                 </div>
                 <div className="flex gap-2">
                   <input ref={fileRef} type="file" accept="video/*" multiple className="hidden" onChange={(e) => upload(Array.from(e.target.files || []))} data-testid="upload-input" />
-                  {demo && <button data-testid="demo-load-footage" onClick={demoLoad} disabled={busy === "demoload"} className="inline-flex items-center gap-2 border border-lumiere-iris/40 text-lumiere-iris hover:bg-lumiere-iris/10 px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">{busy === "demoload" ? <Loader2 size={14} className="animate-spin" /> : <Film size={14} />} Load demo footage</button>}
+                  {demo && <button data-testid="demo-load-footage" onClick={demoLoad} disabled={busy === "demoload"} className="inline-flex items-center gap-2 border border-lumiere-iris/40 text-lumiere-iris hover:bg-lumiere-iris/10 px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">{busy === "demoload" ? <Loader2 size={14} className="animate-spin" /> : <Film size={14} />} {s("Load demo footage", "Cargar material demo")}</button>}
                   <button data-testid="upload-button" onClick={() => fileRef.current?.click()} disabled={busy === "upload"} className="inline-flex items-center gap-2 border border-lumiere-ink/20 hover:border-lumiere-iris px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">
-                    {busy === "upload" ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} Upload
+                    {busy === "upload" ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} {s("Upload", "Subir")}
                   </button>
                   <button data-testid="analyze-button" onClick={analyze} disabled={busy === "analyze" || assets.length === 0} className="inline-flex items-center gap-2 bg-lumiere-ink text-lumiere-ivory hover:bg-lumiere-ink/85 disabled:opacity-50 px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">
-                    {busy === "analyze" ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Analyze
+                    {busy === "analyze" ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} {s("Analyze", "Analizar")}
                   </button>
                 </div>
               </div>
@@ -304,11 +307,11 @@ export default function Experience() {
 
             {c && (
               <div className="grid md:grid-cols-[auto_1fr] gap-6 items-center rounded-2xl border border-black/10 bg-lumiere-warm p-6" data-testid="completeness-panel">
-                <CircularScore value={c.score} label="Story completeness" testid="completeness-score" />
+                <CircularScore value={c.score} label={s("Story completeness", "Completitud")} testid="completeness-score" />
                 <div className="space-y-2">
-                  <Bar label="Narrative" v={c.narrative} /><Bar label="Visual" v={c.visual} /><Bar label="Emotional" v={c.emotional} />
+                  <Bar label={s("Narrative", "Narrativa")} v={c.narrative} /><Bar label={s("Visual", "Visual")} v={c.visual} /><Bar label={s("Emotional", "Emocional")} v={c.emotional} />
                   <p className="font-mono text-[0.6rem] uppercase tracking-widest mt-2 text-lumiere-ink/50">
-                    Critical beats {c.critical_covered}/{c.critical_total} · <span className={c.status === "COMPLETE" ? "text-lumiere-sage" : "text-lumiere-gold"}>{c.status}</span>
+                    {s("Critical beats", "Beats críticos")} {c.critical_covered}/{c.critical_total} · <span className={c.status === "COMPLETE" ? "text-lumiere-sage" : "text-lumiere-gold"}>{c.status}</span>
                   </p>
                 </div>
               </div>
@@ -316,19 +319,19 @@ export default function Experience() {
 
             {gaps.length > 0 && (
               <div className="rounded-2xl border-2 border-lumiere-iris/40 bg-lumiere-iris/5 p-7" data-testid="missing-shot">
-                <p className="font-mono text-xs uppercase tracking-widest text-lumiere-iris mb-1">The film needs one more thing</p>
-                <h2 className="font-display text-2xl">Your film is almost ready.</h2>
-                <p className="text-lumiere-ink/60 mt-1">One final shot could make it stronger.</p>
+                <p className="font-mono text-xs uppercase tracking-widest text-lumiere-iris mb-1">{s("The film needs one more thing", "A la película le falta una cosa")}</p>
+                <h2 className="font-display text-2xl">{s("Your film is almost ready.", "Tu película casi está lista.")}</h2>
+                <p className="text-lumiere-ink/60 mt-1">{s("One final shot could make it stronger.", "Una toma final podría hacerla más fuerte.")}</p>
                 <div className="mt-4 space-y-3">
                   {gaps.map((gp) => (
                     <div key={gp.gap_id} data-testid={`gap-${gp.gap_id}`} className="rounded-xl border border-black/10 bg-lumiere-warm p-4 flex items-center justify-between gap-4">
                       <div>
-                        <span className="font-mono text-[0.55rem] uppercase tracking-widest text-lumiere-gold">Missing: {gp.missing_function}</span>
+                        <span className="font-mono text-[0.55rem] uppercase tracking-widest text-lumiere-gold">{s("Missing", "Falta")}: {gp.missing_function}</span>
                         <p className="text-sm mt-0.5">{g(gp.why_it_matters)}</p>
                       </div>
                       <button data-testid={`get-the-shot-${gp.gap_id}`} onClick={() => getTheShot(gp.gap_id)} disabled={busy === "gap"}
                         className="shrink-0 inline-flex items-center gap-2 bg-lumiere-iris text-white hover:bg-lumiere-irisHover px-5 py-2.5 rounded-full font-mono text-xs uppercase tracking-widest transition-colors shadow-[0_0_18px_rgba(114,103,168,0.35)]">
-                        {busy === "gap" ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />} Get the shot
+                        {busy === "gap" ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />} {s("Get the shot", "Consigue la toma")}
                       </button>
                     </div>
                   ))}
@@ -338,7 +341,7 @@ export default function Experience() {
 
             <div>
               <div className="flex items-center justify-between mb-3">
-                <p className="font-mono text-xs uppercase tracking-widest text-lumiere-ink/50">Your film</p>
+                <p className="font-mono text-xs uppercase tracking-widest text-lumiere-ink/50">{s("Your film", "Tu película")}</p>
                 <div className="flex gap-2">
                   {STYLES.map((st) => (
                     <button key={st} data-testid={`build-${st}`} onClick={() => build(st)} disabled={busy === "build"}
@@ -349,17 +352,17 @@ export default function Experience() {
                 </div>
               </div>
               {cuts.length === 0 ? (
-                <div className="border border-dashed border-black/15 rounded-2xl py-14 text-center text-lumiere-ink/50">Build your film once footage is analyzed.</div>
+                <div className="border border-dashed border-black/15 rounded-2xl py-14 text-center text-lumiere-ink/50">{s("Build your film once footage is analyzed.", "Arma tu película cuando el material esté analizado.")}</div>
               ) : (
                 <div className="space-y-4" data-testid="cuts-list">
                   {cuts.map((cut, i) => (
                     <div key={cut.cut_id} data-testid={`cut-${cut.cut_id}`} className="rounded-2xl border border-black/10 bg-lumiere-warm overflow-hidden">
                       <div className="flex items-center gap-2 px-4 py-2 border-b border-black/5">
                         <span className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/60">v{i + 1} · {cut.style} · {Math.round(cut.actual_duration)}s</span>
-                        {cut.parent_cut_id && <span className="font-mono text-[0.55rem] text-lumiere-iris">↳ revision</span>}
+                        {cut.parent_cut_id && <span className="font-mono text-[0.55rem] text-lumiere-iris">↳ {s("revision", "revisión")}</span>}
                         <button data-testid={`share-${cut.cut_id}`} onClick={() => doShare(cut.cut_id)} disabled={busy === "share"}
                           className="ml-auto inline-flex items-center gap-1.5 border border-lumiere-ink/20 hover:border-lumiere-gold px-3 py-1 rounded-full font-mono text-[0.55rem] uppercase tracking-widest transition-colors">
-                          {busy === "share" ? <Loader2 size={11} className="animate-spin" /> : <Share2 size={11} />} Share
+                          {busy === "share" ? <Loader2 size={11} className="animate-spin" /> : <Share2 size={11} />} {s("Share", "Compartir")}
                         </button>
                       </div>
                       {shared[cut.cut_id] && (
@@ -370,11 +373,11 @@ export default function Experience() {
                       )}
                       <video src={fileUrl(cut.storage_path)} controls className="w-full bg-black max-h-[380px]" data-testid={`cut-player-${cut.cut_id}`} />
                       <div className="p-4 flex gap-2">
-                        <input data-testid="revise-input" value={revText} onChange={(e) => setRevText(e.target.value)} placeholder='e.g. "make it faster, less of me"'
+                        <input data-testid="revise-input" value={revText} onChange={(e) => setRevText(e.target.value)} placeholder={s('e.g. "make it faster, less of me"', 'ej. "más rápido, menos de mí"')}
                           className="flex-1 bg-white border border-black/15 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-lumiere-iris" />
                         <button data-testid={`revise-${cut.cut_id}`} onClick={() => revise(cut.cut_id)} disabled={busy === "revise"}
                           className="inline-flex items-center gap-2 bg-lumiere-ink text-lumiere-ivory hover:bg-lumiere-ink/85 px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">
-                          {busy === "revise" ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />} Revise
+                          {busy === "revise" ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />} {s("Revise", "Revisar")}
                         </button>
                       </div>
                     </div>
@@ -388,7 +391,7 @@ export default function Experience() {
         {/* ---------------- AGENT TRACE ---------------- */}
         <div className="mt-12 border-t border-black/10 pt-6">
           <button data-testid="trace-toggle" onClick={() => (trace ? setTrace(null) : loadTrace())} className="inline-flex items-center gap-2 font-mono text-[0.65rem] uppercase tracking-widest text-lumiere-ink/50 hover:text-lumiere-ink">
-            <Activity size={14} /> Agent Trace {trace ? "▲" : "▼"}
+            <Activity size={14} /> {s("Agent Trace", "Traza de agentes")} {trace ? "▲" : "▼"}
           </button>
           {trace && (
             <div className="mt-3 overflow-x-auto rounded-xl border border-black/10" data-testid="agent-trace">
@@ -425,6 +428,8 @@ function Bar({ label, v = 0 }) {
 }
 
 function LiveDirector({ id, beats, onAction, reload, onGoAfter }) {
+  const { lang } = useI18n();
+  const s = (en, es) => (lang === "es" ? es : en);
   const [data, setData] = useState(null);
   const load = useCallback(async () => { try { const r = await api.get(`/v2/experiences/${id}/next-shot`); setData(r.data); } catch { /* */ } }, [id]);
   useEffect(() => { load(); }, [load]);
@@ -434,11 +439,11 @@ function LiveDirector({ id, beats, onAction, reload, onGoAfter }) {
   if (!m) return (
     <div data-testid="phase-during-content" className="rounded-2xl border border-black/10 bg-lumiere-warm p-10 text-center">
       <Check size={32} className="mx-auto text-lumiere-sage mb-3" />
-      <h2 className="font-display text-2xl">All missions handled.</h2>
-      <p className="text-lumiere-ink/55 mt-1">Head to After to upload and build your film.</p>
+      <h2 className="font-display text-2xl">{s("All missions handled.", "Todas las misiones completadas.")}</h2>
+      <p className="text-lumiere-ink/55 mt-1">{s("Head to After to upload and build your film.", "Ve a Después para subir y armar tu película.")}</p>
       <button data-testid="during-go-after" onClick={onGoAfter}
         className="mt-6 inline-flex items-center gap-2 bg-lumiere-ink text-lumiere-ivory hover:bg-lumiere-ink/85 px-6 py-3 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">
-        Go to After <ArrowRight size={15} />
+        {s("Go to After", "Ir a Después")} <ArrowRight size={15} />
       </button>
     </div>
   );
@@ -447,21 +452,21 @@ function LiveDirector({ id, beats, onAction, reload, onGoAfter }) {
     <div data-testid="phase-during-content" className="max-w-2xl mx-auto">
       <div className="rounded-2xl overflow-hidden border border-black/10 bg-gradient-to-br from-lumiere-iris/15 to-lumiere-gold/10 p-8" data-testid="live-director">
         <div className="flex items-center gap-2 text-lumiere-iris mb-4">
-          <Clock size={14} /><span className="font-mono text-[0.6rem] uppercase tracking-widest">{m.ideal_time_label ? `Golden hour · ${m.ideal_time_label}` : m.ideal_time_window} · why now: best light</span>
+          <Clock size={14} /><span className="font-mono text-[0.6rem] uppercase tracking-widest">{m.ideal_time_label ? `${s("Golden hour", "Hora dorada")} · ${m.ideal_time_label}` : m.ideal_time_window} · {s("why now: best light", "por qué ahora: mejor luz")}</span>
         </div>
         <span className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/50">{g(m.shot_type)} · {g(m.movement)}{m.is_gap_mission ? " · GAP" : ""}</span>
         <h2 className="font-display text-3xl mt-2 leading-tight" data-testid="live-mission-action">{g(m.action)}</h2>
         <p className="text-lumiere-ink/60 mt-3">{g(m.narrative_purpose)}</p>
         <p className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/40 mt-3">~{m.duration_seconds}s</p>
         <div className="flex flex-wrap gap-2 mt-6">
-          <button data-testid="mission-gotit" onClick={() => act("captured")} className="inline-flex items-center gap-2 bg-lumiere-ink text-lumiere-ivory hover:bg-lumiere-ink/85 px-5 py-2.5 rounded-full font-mono text-xs uppercase tracking-widest"><Check size={14} /> I got it</button>
-          <button data-testid="mission-skip" onClick={() => act("skipped", "not_possible")} className="inline-flex items-center gap-2 border border-black/15 text-lumiere-ink/60 hover:text-lumiere-ink px-5 py-2.5 rounded-full font-mono text-xs uppercase tracking-widest"><SkipForward size={14} /> Skip</button>
-          <button data-testid="mission-notnow" onClick={() => act("pending", "not_now")} className="inline-flex items-center gap-2 border border-black/15 text-lumiere-ink/60 hover:text-lumiere-ink px-5 py-2.5 rounded-full font-mono text-xs uppercase tracking-widest"><ChevronRight size={14} /> Not now</button>
+          <button data-testid="mission-gotit" onClick={() => act("captured")} className="inline-flex items-center gap-2 bg-lumiere-ink text-lumiere-ivory hover:bg-lumiere-ink/85 px-5 py-2.5 rounded-full font-mono text-xs uppercase tracking-widest"><Check size={14} /> {s("I got it", "Lo tengo")}</button>
+          <button data-testid="mission-skip" onClick={() => act("skipped", "not_possible")} className="inline-flex items-center gap-2 border border-black/15 text-lumiere-ink/60 hover:text-lumiere-ink px-5 py-2.5 rounded-full font-mono text-xs uppercase tracking-widest"><SkipForward size={14} /> {s("Skip", "Saltar")}</button>
+          <button data-testid="mission-notnow" onClick={() => act("pending", "not_now")} className="inline-flex items-center gap-2 border border-black/15 text-lumiere-ink/60 hover:text-lumiere-ink px-5 py-2.5 rounded-full font-mono text-xs uppercase tracking-widest"><ChevronRight size={14} /> {s("Not now", "Ahora no")}</button>
         </div>
       </div>
       <div className="mt-4 flex items-center justify-between font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/50" data-testid="production-progress">
-        <span>{p.captured || 0} of {p.total || 0} shots · {p.critical_covered || 0} of {p.critical_total || 0} critical beats covered</span>
-        <span>{data.remaining} pending</span>
+        <span>{p.captured || 0} {s("of", "de")} {p.total || 0} {s("shots", "tomas")} · {p.critical_covered || 0} {s("of", "de")} {p.critical_total || 0} {s("critical beats covered", "beats críticos cubiertos")}</span>
+        <span>{data.remaining} {s("pending", "pendientes")}</span>
       </div>
     </div>
   );

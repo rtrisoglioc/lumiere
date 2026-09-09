@@ -30,7 +30,7 @@ export default function Account() {
           </div>
           <div className="flex items-center gap-1 border border-black/10 rounded-full p-1 bg-lumiere-warm" data-testid="language-toggle">
             {["en", "es"].map((lg) => (
-              <button key={lg} data-testid={`lang-${lg}`} onClick={() => setLang(lg)}
+              <button key={lg} data-testid={`lang-${lg}`} onClick={() => { setLang(lg); localStorage.setItem("lumiere_lang", lg); }}
                 className={`px-3 py-1.5 rounded-full font-mono text-[0.6rem] uppercase tracking-widest transition-colors ${lang === lg ? "bg-lumiere-ink text-lumiere-ivory" : "text-lumiere-ink/50 hover:text-lumiere-ink"}`}>
                 {lg === "en" ? "English" : "Español"}
               </button>

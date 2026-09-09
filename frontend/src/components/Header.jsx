@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { User, LogOut, ChevronLeft, Home as HomeIcon, Film, Plus, Clapperboard } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useI18n } from "@/i18n";
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
@@ -11,6 +12,10 @@ export function Header({ dark = false, back = false }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { lang } = useI18n();
+  const L = lang === "es"
+    ? { home: "Inicio", experiences: "Experiencias", create: "Crear", studio: "Estudio", profile: "Perfil", signout: "Cerrar sesión", admin: "Admin" }
+    : { home: "Home", experiences: "Experiences", create: "Create", studio: "Studio", profile: "Profile", signout: "Sign out", admin: "Admin" };
 
   const base = dark ? "bg-lumiere-base/70 border-white/10" : "bg-lumiere-ivory/70 border-black/10";
   const txt = dark ? "text-lumiere-ivory" : "text-lumiere-ink";
@@ -23,11 +28,11 @@ export function Header({ dark = false, back = false }) {
 
   // Exactly 5 primary navigation entries (v2.0 Block 0).
   const nav = [
-    { key: "home", label: "Home", icon: HomeIcon, onClick: () => navigate("/studio"), active: location.pathname === "/studio" },
-    { key: "experiences", label: "Experiences", icon: Film, onClick: () => navigate("/experiences"), active: location.pathname === "/experiences" },
-    { key: "create", label: "Create", icon: Plus, onClick: () => navigate("/create"), active: location.pathname === "/create" },
-    { key: "studio", label: "Studio", icon: Clapperboard, onClick: goStudio, active: location.pathname.startsWith("/studio/") },
-    { key: "profile", label: "Profile", icon: User, onClick: () => navigate("/account"), active: location.pathname === "/account" },
+    { key: "home", label: L.home, icon: HomeIcon, onClick: () => navigate("/studio"), active: location.pathname === "/studio" },
+    { key: "experiences", label: L.experiences, icon: Film, onClick: () => navigate("/experiences"), active: location.pathname === "/experiences" },
+    { key: "create", label: L.create, icon: Plus, onClick: () => navigate("/create"), active: location.pathname === "/create" },
+    { key: "studio", label: L.studio, icon: Clapperboard, onClick: goStudio, active: location.pathname.startsWith("/studio/") },
+    { key: "profile", label: L.profile, icon: User, onClick: () => navigate("/account"), active: location.pathname === "/account" },
   ];
 
   const initial = (user?.name || user?.email || "L").charAt(0).toUpperCase();
@@ -71,12 +76,12 @@ export function Header({ dark = false, back = false }) {
               <p className="font-mono text-[0.65rem] text-lumiere-ink/50 truncate">{user?.email}</p>
             </div>
             <DropdownMenuSeparator />
-            <DropdownMenuItem data-testid="menu-account" onClick={() => navigate("/account")} className="cursor-pointer gap-2"><User size={15} /> Profile</DropdownMenuItem>
+            <DropdownMenuItem data-testid="menu-account" onClick={() => navigate("/account")} className="cursor-pointer gap-2"><User size={15} /> {L.profile}</DropdownMenuItem>
             {user?.is_admin && (
-              <DropdownMenuItem data-testid="menu-admin" onClick={() => navigate("/admin")} className="cursor-pointer gap-2"><User size={15} /> Admin</DropdownMenuItem>
+              <DropdownMenuItem data-testid="menu-admin" onClick={() => navigate("/admin")} className="cursor-pointer gap-2"><User size={15} /> {L.admin}</DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem data-testid="menu-signout" onClick={logout} className="cursor-pointer gap-2 text-red-600"><LogOut size={15} /> Sign out</DropdownMenuItem>
+            <DropdownMenuItem data-testid="menu-signout" onClick={logout} className="cursor-pointer gap-2 text-red-600"><LogOut size={15} /> {L.signout}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
