@@ -215,9 +215,9 @@ export default function Experience() {
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <p className="font-mono text-xs uppercase tracking-widest text-lumiere-ink/50">{s("Story arc", "Arco narrativo")} · {beats.length} {s("beats", "beats")}</p>
-                    <button data-testid="translate-story" onClick={() => translateStory(lang)} disabled={busy === "translate"}
+                    <button data-testid="translate-story" onClick={() => translateStory(lang === "en" ? "es" : "en")} disabled={busy === "translate"}
                       className="inline-flex items-center gap-1.5 border border-lumiere-ink/20 hover:border-lumiere-gold px-3 py-1 rounded-full font-mono text-[0.55rem] uppercase tracking-widest transition-colors">
-                      {busy === "translate" ? <Loader2 size={11} className="animate-spin" /> : <Wand2 size={11} />} {lang === "es" ? "Traducir al español" : "Translate to English"}
+                      {busy === "translate" ? <Loader2 size={11} className="animate-spin" /> : <Wand2 size={11} />} {lang === "en" ? "Translate to Spanish" : "Traducir al inglés"}
                     </button>
                   </div>
                   <div className="flex gap-3 overflow-x-auto pb-3" data-testid="beats-strip">
