@@ -33,6 +33,7 @@ export default function Experience() {
   const [feelings, setFeelings] = useState([]);
   const [freeText, setFreeText] = useState("");
   const [presence, setPresence] = useState("balanced");
+  const [ideas, setIdeas] = useState([]);
 
   const load = useCallback(async () => {
     try {
@@ -76,6 +77,10 @@ export default function Experience() {
   };
 
   const genShots = async () => { setBusy("shots"); try { await api.post(`/v2/experiences/${id}/shots`); await load(); toast.success("Shots ready"); } catch { toast.error("Failed"); } finally { setBusy(""); } };
+
+  const suggestIdeas = async () => { setBusy("ideas"); try { const r = await api.post(`/v2/experiences/${id}/story-ideas`); setIdeas(r.data.ideas || []); if (!r.data.ideas?.length) toast.info("No ideas — try again"); } catch { toast.error("Couldn't fetch ideas"); } finally { setBusy(""); } };
+  const applyIdea = (idea) => { setFeelings((idea.feeling_tags || []).slice(0, 3)); setFreeText(idea.free_text || ""); toast.success("Idea applied — tweak or create"); };
+  const deleteShot = async (shotId) => { try { await api.delete(`/v2/shots/${shotId}`); await load(); toast.success("Shot removed"); } catch { toast.error("Couldn't remove shot"); } };
 
   const upload = async (files) => {
     if (!files?.length) return;
@@ -156,6 +161,22 @@ export default function Experience() {
               <div className="rounded-2xl border border-black/10 bg-lumiere-warm p-7 max-w-2xl" data-testid="intent-form">
                 <p className="font-mono text-xs uppercase tracking-widest text-lumiere-gold mb-1">Story Intent</p>
                 <h2 className="font-display text-2xl mb-4">What do you want this experience to feel like?</h2>
+                <button data-testid="suggest-ideas" onClick={suggestIdeas} disabled={busy === "ideas"}
+                  className="mb-4 inline-flex items-center gap-2 border border-lumiere-iris/40 text-lumiere-iris hover:bg-lumiere-iris/10 px-4 py-2 rounded-full font-mono text-[0.6rem] uppercase tracking-widest transition-colors">
+                  {busy === "ideas" ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />} Suggest ideas with AI
+                </button>
+                {ideas.length > 0 && (
+                  <div className="space-y-2 mb-5" data-testid="ideas-list">
+                    {ideas.map((idea, i) => (
+                      <button key={i} data-testid={`idea-${i}`} onClick={() => applyIdea(idea)}
+                        className="w-full text-left rounded-xl border border-lumiere-iris/25 bg-lumiere-iris/5 hover:bg-lumiere-iris/10 p-3 transition-colors">
+                        <span className="font-display text-base">{g(idea.title)}</span>
+                        <span className="block text-xs text-lumiere-ink/55 mt-0.5">{g(idea.free_text)}</span>
+                        <span className="block font-mono text-[0.5rem] uppercase tracking-widest text-lumiere-iris mt-1">{(idea.feeling_tags || []).join(" · ")}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-2 mb-5">
                   {MOODS.map((m) => (
                     <button key={m} data-testid={`mood-${m}`} onClick={() => setFeelings((f) => f.includes(m) ? f.filter((x) => x !== m) : f.length < 3 ? [...f, m] : f)}
@@ -205,8 +226,12 @@ export default function Experience() {
                   </div>
                   <div className="grid sm:grid-cols-2 gap-3" data-testid="shots-list">
                     {shots.map((s) => (
-                      <div key={s.shot_id} data-testid={`shot-${s.shot_id}`} className="rounded-xl border border-black/10 bg-lumiere-warm p-4">
-                        <div className="flex items-center justify-between">
+                      <div key={s.shot_id} data-testid={`shot-${s.shot_id}`} className="group relative rounded-xl border border-black/10 bg-lumiere-warm p-4">
+                        <button data-testid={`delete-shot-${s.shot_id}`} onClick={() => deleteShot(s.shot_id)} title="Remove shot"
+                          className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-black/5 text-lumiere-ink/40 hover:bg-red-600 hover:text-white opacity-0 group-hover:opacity-100 transition-all">
+                          <Trash2 size={12} />
+                        </button>
+                        <div className="flex items-center justify-between pr-6">
                           <span className="font-mono text-[0.55rem] uppercase tracking-widest text-lumiere-ink/50">{g(s.shot_type)} · {g(s.movement)}</span>
                           <span className="font-mono text-[0.55rem] text-lumiere-ink/40">P{s.priority}{s.status === "captured" ? " · ✓" : ""}</span>
                         </div>

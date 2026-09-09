@@ -274,3 +274,17 @@ async def reviser_parse(exp_id, instruction, beats, tracks):
         out = {"pace": None, "creator_presence": None, "duration_target": None, "music": None,
                "emphasis_beat": None, "remove_segments": [], "tone": None}
     return out, meta
+
+
+IDEAS_SYS = """You are a creative director brainstorming short-film angles for a real trip.
+Given a place and type, propose 3 DISTINCT ideas. For each: a short evocative title,
+2-3 feeling tags chosen ONLY from [curious, free, elegant, warm, energetic, intimate,
+nostalgic, bold], and a one-sentence intent (free_text) the creator could use.
+Return ONLY JSON: {"ideas":[{"title":str,"feeling_tags":[str],"free_text":str}]}"""
+
+
+async def story_ideas(exp):
+    prompt = (f"Place: {exp.get('location_name') or 'somewhere'}. Type: {exp.get('type')}. "
+              f"Target: {exp.get('target_platform')}. Propose 3 ideas.")
+    out, meta = await _run_and_trace(exp["id"], "Director Agent", "suggest_ideas", IDEAS_SYS, prompt, model=PROXY_FAST)
+    return out, meta

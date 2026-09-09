@@ -230,6 +230,24 @@ async def generate_shots(exp_id: str, user: dict = Depends(get_current_user)):
     return {"shots": shots}
 
 
+@v2_router.post("/experiences/{exp_id}/story-ideas")
+async def story_ideas(exp_id: str, user: dict = Depends(get_current_user)):
+    exp = await _exp(exp_id, user)
+    out, _ = await v2agents.story_ideas(exp)
+    ideas = out.get("ideas") if isinstance(out, dict) else None
+    return {"ideas": (ideas or [])[:3]}
+
+
+@v2_router.delete("/shots/{shot_id}")
+async def delete_shot(shot_id: str, user: dict = Depends(get_current_user)):
+    shot = await db.shot_missions.find_one({"shot_id": shot_id}, {"_id": 0})
+    if not shot:
+        raise HTTPException(status_code=404, detail="shot_not_found")
+    await _exp(shot["experience_id"], user)
+    await db.shot_missions.delete_one({"shot_id": shot_id})
+    return {"ok": True}
+
+
 @v2_router.get("/experiences/{exp_id}/state")
 async def get_state(exp_id: str, user: dict = Depends(get_current_user)):
     exp = await _exp(exp_id, user)
