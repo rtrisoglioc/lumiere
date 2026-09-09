@@ -53,40 +53,6 @@ export default function Home() {
   const usage = account?.usage;
   const limits = account?.limits;
 
-  const CreateDialog = ({ trigger }) => (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="bg-lumiere-warm border border-black/10 text-lumiere-ink rounded-2xl">
-        <DialogHeader>
-          <DialogTitle className="font-display text-3xl">{t("createExperience")}</DialogTitle>
-          <DialogDescription className="text-lumiere-ink/50">{t("subtitle")}</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-5 pt-2">
-          <div>
-            <label className="label-mono block mb-2 text-lumiere-ink/60">{t("title")}</label>
-            <Input data-testid="experience-title-input" value={title} onChange={(e) => setTitle(e.target.value)}
-              className="bg-white border-black/15 rounded-lg focus-visible:ring-lumiere-gold" placeholder="Coastal Road Trip" />
-          </div>
-          <div>
-            <label className="label-mono block mb-2 text-lumiere-ink/60">{t("type")}</label>
-            <div className="flex gap-2">
-              {TYPES.map((ty) => (
-                <button key={ty} data-testid={`type-${ty}`} onClick={() => setType(ty)}
-                  className={`px-4 py-2 font-mono text-xs uppercase tracking-widest border rounded-full transition-colors ${type === ty ? "border-lumiere-gold bg-lumiere-gold/15 text-lumiere-ink" : "border-black/15 text-lumiere-ink/50 hover:text-lumiere-ink"}`}>
-                  {ty}
-                </button>
-              ))}
-            </div>
-          </div>
-          <button data-testid="confirm-create-button" onClick={create} disabled={creating}
-            className="w-full bg-lumiere-gold hover:bg-lumiere-goldHover disabled:opacity-50 text-lumiere-ink py-3 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">
-            {creating ? "…" : t("create")}
-          </button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-
   return (
     <div className="min-h-screen bg-lumiere-ivory text-lumiere-ink">
       <Header />
@@ -129,11 +95,41 @@ export default function Home() {
           <div>
             <div className="flex items-center justify-between mb-4">
               <p className="label-mono text-lumiere-ink/50">{t("recentFilms")}</p>
-              <CreateDialog trigger={
-                <button data-testid="new-experience-button" className="inline-flex items-center gap-2 bg-lumiere-ink text-lumiere-ivory hover:bg-lumiere-ink/85 px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">
-                  <Plus size={14} /> {t("createNew")}
-                </button>
-              } />
+              <Dialog open={open} onOpenChange={setOpen}>
+                <DialogTrigger asChild>
+                  <button data-testid="new-experience-button" className="inline-flex items-center gap-2 bg-lumiere-ink text-lumiere-ivory hover:bg-lumiere-ink/85 px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">
+                    <Plus size={14} /> {t("createNew")}
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="bg-lumiere-warm border border-black/10 text-lumiere-ink rounded-2xl">
+                  <DialogHeader>
+                    <DialogTitle className="font-display text-3xl">{t("createExperience")}</DialogTitle>
+                    <DialogDescription className="text-lumiere-ink/50">{t("subtitle")}</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-5 pt-2">
+                    <div>
+                      <label className="label-mono block mb-2 text-lumiere-ink/60">{t("title")}</label>
+                      <Input data-testid="experience-title-input" value={title} onChange={(e) => setTitle(e.target.value)}
+                        className="bg-white border-black/15 rounded-lg focus-visible:ring-lumiere-gold" placeholder="Coastal Road Trip" />
+                    </div>
+                    <div>
+                      <label className="label-mono block mb-2 text-lumiere-ink/60">{t("type")}</label>
+                      <div className="flex gap-2">
+                        {TYPES.map((ty) => (
+                          <button key={ty} data-testid={`type-${ty}`} onClick={() => setType(ty)}
+                            className={`px-4 py-2 font-mono text-xs uppercase tracking-widest border rounded-full transition-colors ${type === ty ? "border-lumiere-gold bg-lumiere-gold/15 text-lumiere-ink" : "border-black/15 text-lumiere-ink/50 hover:text-lumiere-ink"}`}>
+                            {ty}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <button data-testid="confirm-create-button" onClick={create} disabled={creating}
+                      className="w-full bg-lumiere-gold hover:bg-lumiere-goldHover disabled:opacity-50 text-lumiere-ink py-3 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">
+                      {creating ? "…" : t("create")}
+                    </button>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
             {experiences.length === 0 ? (
               <div className="border border-dashed border-black/15 rounded-2xl py-20 text-center">
