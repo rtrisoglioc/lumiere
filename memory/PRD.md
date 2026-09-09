@@ -318,3 +318,14 @@ Backend curl-verified + frontend testing-agent-verified end to end.
 - Block 2.8: Veo previz (degrade to Gemini reference image, badge AI REFERENCE, provenance ai_previz never in EDL) — endpoint scaffold pending.
 - Block 2 polish: SCR-020 location autocomplete via Nominatim (UA LumiereStudio/1.0, 1 req/s, 400ms debounce, cache; fallback free-text null latlng). Currently Create takes title/type only; location can be set via API.
 - Block 10: DEMO_MODE (preloaded /demo_assets, fallback_cut.mp4, cached agent responses, one-click reset).
+
+### v2 P1/P2 batch — ✅ DONE (2026-09-09, curl-verified + UI smoke-tested)
+Order requested by user: DEMO_MODE → title cards → previz → geocoding. All PASS.
+- **DEMO_MODE** (backend/.env DEMO_MODE=true): GET /api/v2/demo/config; POST demo/load-footage (synthesizes 3-4 CC0 demo clips into media_assets); POST demo/reset (clears footage/segments/gaps/cuts, phase→before, keeps story+shots) <3s; render FALLBACK cut when render fails in demo (never blank, traced); agent-response cache (demo_agent_cache) reused on LLM failure. Frontend: demo-load-footage + demo-reset buttons (gated by config).
+- **Title cards** (Block 4.8): ffmpeg_worker.normalize_segment burns drawtext (LiberationSerif-Bold, lower-third, fade-in); build EDL attaches title_card text, max 3 per film; verified drawtext renders.
+- **Previz** (Block 2.8): POST /api/v2/shots/{id}/previz → Gemini image (gemini-3.1-flash-image-preview, Universal Key, 45s cap) → media_asset provenance="ai_previz" (HARD-filtered from every EDL) + shot.previz_asset_id; degrades gracefully. Frontend "Preview shot" button → image with "AI REFERENCE" badge + caption. Verified: 1MB PNG served 200.
+- **Geocoding** (backend/geocode.py): single Nominatim call at experience save (UA LumiereStudio/1.0, per-query in-mem cache, 8s timeout); NO autocomplete. Free-text location in Create.jsx. Verified: "Lisbon, Portugal"→(38.708,-9.137); gibberish→(null,null) → Golden Hour falls back to generic labels.
+
+### STILL REMAINING (optional polish)
+- SCR-020/021/022/023 as separate onboarding screens (currently unified in workspace Before tab; onboarding ≤3 steps satisfied).
+- Real Veo (swap previz Gemini→Veo when Cloud Run gateway /video is redeployed).

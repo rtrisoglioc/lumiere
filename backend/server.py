@@ -241,6 +241,10 @@ async def partner_health():
 # ---------- experiences ----------
 @api.post("/experiences")
 async def create_experience(body: ExperienceIn, user: dict = Depends(get_current_user)):
+    import geocode
+    lat, lng = body.location_lat, body.location_lng
+    if body.location_name and (lat is None or lng is None):
+        lat, lng = await asyncio.to_thread(geocode.geocode, body.location_name)
     exp = {
         "id": str(uuid.uuid4()),
         "owner": user["user_id"],
@@ -251,8 +255,8 @@ async def create_experience(body: ExperienceIn, user: dict = Depends(get_current
         "privacy": "private",
         "phase": "before",
         "location_name": body.location_name,
-        "location_lat": body.location_lat,
-        "location_lng": body.location_lng,
+        "location_lat": lat,
+        "location_lng": lng,
         "start_date": body.start_date,
         "end_date": body.end_date,
         "target_platform": body.target_platform,

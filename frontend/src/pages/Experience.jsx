@@ -25,6 +25,8 @@ export default function Experience() {
   const fileRef = useRef();
   const [revText, setRevText] = useState("");
   const [trace, setTrace] = useState(null);
+  const [demo, setDemo] = useState(false);
+  const [previz, setPreviz] = useState({});
 
   // intent form
   const [feelings, setFeelings] = useState([]);
@@ -40,6 +42,10 @@ export default function Experience() {
     } catch { toast.error("Failed to load"); }
   }, [id, tab]);
   useEffect(() => { load(); }, [id]); // eslint-disable-line
+  useEffect(() => { api.get(`/v2/demo/config`).then((r) => setDemo(r.data.demo_mode)).catch(() => {}); }, []);
+
+  const demoLoad = async () => { setBusy("demoload"); try { await api.post(`/v2/experiences/${id}/demo/load-footage`); await load(); setTab("after"); toast.success("Demo footage loaded"); } catch { toast.error("Failed"); } finally { setBusy(""); } };
+  const demoReset = async () => { setBusy("demoreset"); try { await api.post(`/v2/experiences/${id}/demo/reset`); await load(); toast.success("Demo reset"); } catch { toast.error("Failed"); } finally { setBusy(""); } };
 
   const exp = state?.experience;
   const story = state?.story;
@@ -89,6 +95,12 @@ export default function Experience() {
 
   const loadTrace = async () => { try { const r = await api.get(`/v2/experiences/${id}/trace`); setTrace(r.data); } catch { /* */ } };
 
+  const doPreviz = async (shotId) => {
+    setPreviz((p) => ({ ...p, [shotId]: { loading: true } }));
+    try { const r = await api.post(`/v2/shots/${shotId}/previz`); setPreviz((p) => ({ ...p, [shotId]: r.data })); }
+    catch { setPreviz((p) => ({ ...p, [shotId]: { degraded: true, caption: "This is the shot. Go get the real one." } })); }
+  };
+
   const fileUrl = (path) => `${API}/files/${path}?auth=${encodeURIComponent(getToken() || "")}`;
 
   if (!state) return <div className="min-h-screen bg-lumiere-ivory flex items-center justify-center"><Loader2 className="animate-spin text-lumiere-gold" /></div>;
@@ -104,6 +116,7 @@ export default function Experience() {
       <div className="sticky top-[64px] z-30 bg-lumiere-ivory/90 backdrop-blur border-b border-black/5 px-4 sm:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
         <PhaseIndicator phase={exp?.phase || "before"} />
         <div className="flex items-center gap-2">
+          {demo && <button data-testid="demo-reset" onClick={demoReset} disabled={busy === "demoreset"} className="inline-flex items-center gap-1.5 border border-lumiere-iris/40 text-lumiere-iris hover:bg-lumiere-iris/10 px-3 py-1.5 rounded-full font-mono text-[0.55rem] uppercase tracking-widest transition-colors">{busy === "demoreset" ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Reset demo</button>}
           <Tab k="before" label="Before" /><Tab k="during" label="During" /><Tab k="after" label="After" />
         </div>
       </div>
@@ -182,6 +195,18 @@ export default function Experience() {
                         <div className="flex items-center gap-2 mt-2 text-lumiere-gold">
                           <Clock size={12} /><span className="font-mono text-[0.6rem] uppercase tracking-widest">{s.ideal_time_label ? `Golden · ${s.ideal_time_label}` : s.ideal_time_window}</span>
                         </div>
+                        {previz[s.shot_id]?.ok && previz[s.shot_id]?.previz_path ? (
+                          <div className="relative mt-2 rounded-lg overflow-hidden" data-testid={`previz-img-${s.shot_id}`}>
+                            <img src={fileUrl(previz[s.shot_id].previz_path)} alt="" className="w-full h-28 object-cover" />
+                            <span className="absolute top-1 left-1 font-mono text-[0.45rem] uppercase tracking-widest bg-lumiere-iris text-white px-1.5 py-0.5 rounded">AI Reference</span>
+                            <span className="block text-[0.55rem] text-lumiere-ink/50 mt-1 italic">This is the shot. Go get the real one.</span>
+                          </div>
+                        ) : (
+                          <button data-testid={`previz-${s.shot_id}`} onClick={() => doPreviz(s.shot_id)} disabled={previz[s.shot_id]?.loading}
+                            className="mt-2 inline-flex items-center gap-1.5 border border-lumiere-iris/30 text-lumiere-iris hover:bg-lumiere-iris/10 px-2.5 py-1 rounded-full font-mono text-[0.55rem] uppercase tracking-widest transition-colors">
+                            {previz[s.shot_id]?.loading ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />} {previz[s.shot_id]?.degraded ? "Preview unavailable" : "Preview shot"}
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -208,6 +233,7 @@ export default function Experience() {
                 </div>
                 <div className="flex gap-2">
                   <input ref={fileRef} type="file" accept="video/*" multiple className="hidden" onChange={(e) => upload(Array.from(e.target.files || []))} data-testid="upload-input" />
+                  {demo && <button data-testid="demo-load-footage" onClick={demoLoad} disabled={busy === "demoload"} className="inline-flex items-center gap-2 border border-lumiere-iris/40 text-lumiere-iris hover:bg-lumiere-iris/10 px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">{busy === "demoload" ? <Loader2 size={14} className="animate-spin" /> : <Film size={14} />} Load demo footage</button>}
                   <button data-testid="upload-button" onClick={() => fileRef.current?.click()} disabled={busy === "upload"} className="inline-flex items-center gap-2 border border-lumiere-ink/20 hover:border-lumiere-iris px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">
                     {busy === "upload" ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} Upload
                   </button>

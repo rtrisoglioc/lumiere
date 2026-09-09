@@ -11,14 +11,17 @@ import re
 import json
 import time
 import uuid
+import hashlib
 
 from agents import _persist_run
+from db import db
 
 EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
 MODEL_FAST = "gemini-3.5-flash"
 MODEL_PRO = "gemini-3.5-flash"
 PROXY_FAST = MODEL_FAST  # kept for call-site compatibility
 FUNCTIONS = ["arrival", "discovery", "movement", "connection", "reflection", "resolution"]
+DEMO_MODE = (os.environ.get("DEMO_MODE") or "").lower() in ("1", "true", "yes")
 
 
 def _extract_json(text):
@@ -52,6 +55,15 @@ async def _run_and_trace(exp_id, agent_label, operation, system, prompt, model=N
         status = "FAILED"
         out = {"_error": str(e)[:200]}
     latency_ms = int((time.time() - started) * 1000)
+    # DEMO_MODE fail-safe: cache successes; reuse the last good response on failure for the same input.
+    if DEMO_MODE:
+        ckey = hashlib.sha256(f"{operation}|{prompt}".encode()).hexdigest()[:32]
+        if status == "OK" and isinstance(out, dict) and not out.get("_error"):
+            await db.demo_agent_cache.update_one({"key": ckey}, {"$set": {"key": ckey, "output": out}}, upsert=True)
+        elif status == "FAILED":
+            cached = await db.demo_agent_cache.find_one({"key": ckey}, {"_id": 0})
+            if cached and cached.get("output"):
+                out, status = cached["output"], "OK_CACHED"
     conf = out.get("confidence") if isinstance(out, dict) else None
     meta = {"service": "emergent-proxy", "operation": operation, "status": status,
             "provider": "google", "model": model or MODEL_FAST, "latency_ms": latency_ms,

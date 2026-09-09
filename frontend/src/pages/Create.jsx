@@ -11,13 +11,15 @@ export default function Create() {
   const navigate = useNavigate();
   const [title, setTitle] = useState("");
   const [type, setType] = useState("travel");
+  const [location, setLocation] = useState("");
+  const [platform, setPlatform] = useState("cinematic");
   const [creating, setCreating] = useState(false);
 
   const create = async () => {
     if (!title.trim()) return;
     setCreating(true);
     try {
-      const res = await api.post("/experiences", { title: title.trim(), type });
+      const res = await api.post("/experiences", { title: title.trim(), type, location_name: location.trim() || null, target_platform: platform });
       localStorage.setItem("lumiere_last_exp", res.data.id);
       navigate(`/studio/${res.data.id}`);
     } catch { toast.error("Failed to create"); }
@@ -40,12 +42,29 @@ export default function Create() {
               className="w-full bg-white border border-black/15 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-lumiere-gold" />
           </div>
           <div>
+            <label className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/50 block mb-2">Location <span className="opacity-50">(free text — we resolve it once)</span></label>
+            <input data-testid="create-location-input" value={location} onChange={(e) => setLocation(e.target.value)}
+              placeholder="Lisbon, Portugal"
+              className="w-full bg-white border border-black/15 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-lumiere-gold" />
+          </div>
+          <div>
             <label className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/50 block mb-2">Type</label>
             <div className="flex gap-2">
               {TYPES.map((ty) => (
                 <button key={ty} data-testid={`create-type-${ty}`} onClick={() => setType(ty)}
                   className={`px-4 py-2 font-mono text-xs uppercase tracking-widest border rounded-full transition-colors ${type === ty ? "border-lumiere-gold bg-lumiere-gold/15 text-lumiere-ink" : "border-black/15 text-lumiere-ink/50 hover:text-lumiere-ink"}`}>
                   {ty}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/50 block mb-2">Target</label>
+            <div className="flex gap-2">
+              {["cinematic", "social", "story"].map((pf) => (
+                <button key={pf} data-testid={`create-platform-${pf}`} onClick={() => setPlatform(pf)}
+                  className={`px-4 py-2 font-mono text-xs uppercase tracking-widest border rounded-full capitalize transition-colors ${platform === pf ? "border-lumiere-iris bg-lumiere-iris/15 text-lumiere-ink" : "border-black/15 text-lumiere-ink/50 hover:text-lumiere-ink"}`}>
+                  {pf}
                 </button>
               ))}
             </div>

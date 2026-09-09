@@ -47,13 +47,27 @@ def _is_image(src: str) -> bool:
     return bool(info.get("has_video")) and (info.get("duration", 0) or 0) < 0.05
 
 
-def normalize_segment(src: str, start: float, end: float, out: Path, has_audio: bool) -> bool:
+def _drawtext(title: str) -> str:
+    import re as _re
+    safe = _re.sub(r"[^A-Za-z0-9 ,.!?'-]", "", str(title))[:48].replace("'", "")
+    if not safe:
+        return ""
+    font = "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf"
+    fontpart = f"fontfile={font}:" if Path(font).exists() else ""
+    return (f",drawtext={fontpart}text='{safe}':fontsize=52:fontcolor=white:"
+            f"box=1:boxcolor=black@0.45:boxborderw=18:x=(w-text_w)/2:y=h-190:"
+            f"alpha='min(1,max(0,(t-0.3)*2))'")
+
+
+def normalize_segment(src: str, start: float, end: float, out: Path, has_audio: bool, title: str = None) -> bool:
     """Trim [start,end] and normalize to 1280x720/30fps + stereo audio.
     Still images are looped to fill the requested duration (so they render and
-    can be crossfaded like video clips)."""
+    can be crossfaded like video clips). Optional title card burned via drawtext."""
     dur = max(0.5, float(end) - float(start))
     vf = ("scale=1280:720:force_original_aspect_ratio=decrease,"
           "pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30")
+    if title:
+        vf += _drawtext(title)
     common_out = ["-vf", vf, "-r", "30",
                   "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
                   "-c:a", "aac", "-ar", "48000", "-ac", "2"]
@@ -150,7 +164,7 @@ def render_cut_with_transitions(edl_clips: list, resolver, tmp_dir: Path, out_pa
             continue
         src, has_audio = resolved
         seg_out = tmp_dir / f"seg_{i:03d}.mp4"
-        if normalize_segment(src, clip.get("segment_start_sec", 0), clip.get("segment_end_sec", 3), seg_out, has_audio):
+        if normalize_segment(src, clip.get("segment_start_sec", 0), clip.get("segment_end_sec", 3), seg_out, has_audio, clip.get("title")):
             seg_files.append(seg_out)
     return xfade_concat(seg_files, out_path, transition, tdur)
 
