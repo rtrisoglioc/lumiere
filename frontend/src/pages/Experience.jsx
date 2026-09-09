@@ -364,7 +364,7 @@ export default function Experience() {
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-4">
                   {assets.map((a) => (
                     <div key={a.id} className="group rounded-lg overflow-hidden border border-black/10 bg-black aspect-video relative">
-                      <video src={fileUrl(a.storage_path)} className="w-full h-full object-cover" muted />
+                      <video src={fileUrl(a.storage_path)} className="w-full h-full object-cover" muted preload="metadata" playsInline />
                       <span className={`absolute bottom-1 left-1 font-mono text-[0.45rem] uppercase px-1 rounded ${a.status === "analyzed" ? "bg-lumiere-sage/80 text-white" : "bg-black/60 text-white"}`}>{a.status}</span>
                       <button data-testid={`delete-asset-${a.id}`} onClick={() => deleteAsset(a.id)}
                         className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center rounded-full bg-black/60 text-white/90 hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove clip">
@@ -442,7 +442,7 @@ export default function Experience() {
                           <button onClick={() => { navigator.clipboard?.writeText(shared[cut.cut_id]); toast.success("Copied"); }} className="text-lumiere-ink/60 hover:text-lumiere-ink"><Copy size={13} /></button>
                         </div>
                       )}
-                      <video src={fileUrl(cut.storage_path)} controls className="w-full bg-black max-h-[380px]" data-testid={`cut-player-${cut.cut_id}`} />
+                      <video src={fileUrl(cut.storage_path)} controls preload="metadata" playsInline className="w-full bg-black max-h-[380px]" data-testid={`cut-player-${cut.cut_id}`} />
                       <div className="p-4 flex gap-2">
                         <input data-testid="revise-input" value={revText} onChange={(e) => setRevText(e.target.value)} placeholder={s('e.g. "make it faster, less of me"', 'ej. "más rápido, menos de mí"')}
                           className="flex-1 bg-white border border-black/15 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-lumiere-iris" />

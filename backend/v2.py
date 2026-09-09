@@ -128,7 +128,7 @@ async def demo_load(exp_id: str, user: dict = Depends(get_current_user)):
     loaded = 0
     for src in clips:
         try:
-            data = src.read_bytes()
+            data = fw.faststart_bytes(src.read_bytes(), src.suffix.lower())
             asset_id = str(uuid.uuid4())
             local_name = f"{asset_id}{src.suffix.lower()}"
             path = f"{storage.APP_NAME}/originals/{exp_id}/{local_name}"
@@ -393,6 +393,7 @@ async def upload(exp_id: str, file: UploadFile = File(...), linked_shot_id: str 
     await _exp(exp_id, user)
     data = await file.read()
     ext = (file.filename.rsplit(".", 1)[-1] or "mp4").lower()
+    data = await asyncio.to_thread(fw.faststart_bytes, data, f".{ext}")
     asset_id = str(uuid.uuid4())
     local_name = f"{asset_id}.{ext}"
     ct = file.content_type or _MIME.get(ext, "video/mp4")

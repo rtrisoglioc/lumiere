@@ -1145,7 +1145,7 @@ async def _verify_token(token: str) -> dict:
     return session
 
 @api.get("/files/{path:path}")
-async def get_file(path: str, authorization: str = Header(default=None), auth: str = Query(default=None),
+async def get_file(path: str, request: Request, authorization: str = Header(default=None), auth: str = Query(default=None),
                    session_token: str = None):
     token = auth
     if not token and authorization and authorization.startswith("Bearer "):
@@ -1159,7 +1159,11 @@ async def get_file(path: str, authorization: str = Header(default=None), auth: s
     if not owned:
         raise HTTPException(status_code=404, detail="Not found")
     data, ct = await asyncio.to_thread(storage.get_object, path)
-    return Response(content=data, media_type=owned.get("content_type", ct))
+    content_type = owned.get("content_type") or ct or "application/octet-stream"
+    # Videos need HTTP Range support so browsers can decode/seek (mp4 moov-at-end otherwise renders black).
+    if str(content_type).startswith("video/") or path.lower().endswith((".mp4", ".mov", ".webm", ".m4v")):
+        return _ranged_video_response(data, request.headers.get("range"))
+    return Response(content=data, media_type=content_type)
 
 
 @app.on_event("startup")

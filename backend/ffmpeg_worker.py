@@ -41,6 +41,37 @@ def probe(path: str) -> dict:
     return {"ok": True, "duration": duration, "has_audio": has_audio, "has_video": has_video}
 
 
+def faststart_bytes(data: bytes, suffix: str = ".mp4") -> bytes:
+    """Remux mp4 bytes so the moov atom is at the FRONT (-movflags +faststart).
+    Browsers can't render mp4s with moov-at-end without full download (black video).
+    Stream-copies (no re-encode). Returns original bytes on any failure."""
+    import tempfile, os
+    if not suffix.lower().lstrip(".") in ("mp4", "mov", "m4v"):
+        return data
+    src = dst = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tf:
+            tf.write(data)
+            src = tf.name
+        dst = src + ".fs.mp4"
+        r = _run(["ffmpeg", "-y", "-i", src, "-c", "copy", "-movflags", "+faststart", dst])
+        if r.returncode == 0 and os.path.exists(dst) and os.path.getsize(dst) > 0:
+            with open(dst, "rb") as f:
+                return f.read()
+    except Exception:
+        pass
+    finally:
+        for p in (src, dst):
+            try:
+                if p and os.path.exists(p):
+                    os.unlink(p)
+            except OSError:
+                pass
+    return data
+
+
+
+
 def _is_image(src: str) -> bool:
     """A still image has a video stream but no meaningful timeline duration."""
     info = probe(src)
