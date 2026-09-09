@@ -92,6 +92,13 @@ export default function Experience() {
   const deleteBeat = async (bid) => { try { await api.delete(`/v2/beats/${bid}`); await load(); toast.success(s("Beat removed", "Beat eliminado")); } catch { toast.error("Error"); } };
   const translateStory = async (to) => { setBusy("translate"); try { await api.post(`/v2/experiences/${id}/translate?to=${to}`); await load(); toast.success(s("Translated", "Traducido")); } catch { toast.error(s("Translation failed", "Falló la traducción")); } finally { setBusy(""); } };
 
+  const [editingShot, setEditingShot] = useState(null);
+  const [shotDraft, setShotDraft] = useState("");
+  const startEditShot = (sh) => { setEditingShot(sh.shot_id); setShotDraft(g(sh.action)); };
+  const saveShot = async () => { try { await api.patch(`/v2/shots/${editingShot}`, { action: shotDraft }); setEditingShot(null); await load(); toast.success(s("Saved", "Guardado")); } catch { toast.error(s("Save failed", "No se pudo guardar")); } };
+  const [regenShotId, setRegenShotId] = useState(null);
+  const regenShot = async (shotId) => { setRegenShotId(shotId); try { await api.post(`/v2/shots/${shotId}/regenerate`); await load(); toast.success(s("New shot generated", "Nueva toma generada")); } catch { toast.error(s("Couldn't regenerate", "No se pudo regenerar")); } finally { setRegenShotId(null); } };
+
   const upload = async (files) => {
     if (!files?.length) return;
     setBusy("upload");
@@ -262,15 +269,36 @@ export default function Experience() {
                   <div className="grid sm:grid-cols-2 gap-3" data-testid="shots-list">
                     {shots.map((s) => (
                       <div key={s.shot_id} data-testid={`shot-${s.shot_id}`} className="group relative rounded-xl border border-black/10 bg-lumiere-warm p-4">
-                        <button data-testid={`delete-shot-${s.shot_id}`} onClick={() => deleteShot(s.shot_id)} title="Remove shot"
-                          className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-black/5 text-lumiere-ink/40 hover:bg-red-600 hover:text-white opacity-0 group-hover:opacity-100 transition-all">
-                          <Trash2 size={12} />
-                        </button>
-                        <div className="flex items-center justify-between pr-6">
+                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                          <button data-testid={`edit-shot-${s.shot_id}`} onClick={() => startEditShot(s)} title={lang === "es" ? "Editar" : "Edit"}
+                            className="w-6 h-6 flex items-center justify-center rounded-full bg-black/5 text-lumiere-ink/50 hover:bg-lumiere-ink hover:text-white transition-colors">
+                            <Pencil size={12} />
+                          </button>
+                          <button data-testid={`regen-shot-${s.shot_id}`} onClick={() => regenShot(s.shot_id)} disabled={regenShotId === s.shot_id} title={lang === "es" ? "Regenerar con IA" : "Regenerate with AI"}
+                            className="w-6 h-6 flex items-center justify-center rounded-full bg-black/5 text-lumiere-iris hover:bg-lumiere-iris hover:text-white transition-colors">
+                            {regenShotId === s.shot_id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                          </button>
+                          <button data-testid={`delete-shot-${s.shot_id}`} onClick={() => deleteShot(s.shot_id)} title={lang === "es" ? "Eliminar toma" : "Remove shot"}
+                            className="w-6 h-6 flex items-center justify-center rounded-full bg-black/5 text-lumiere-ink/40 hover:bg-red-600 hover:text-white transition-colors">
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-between pr-20">
                           <span className="font-mono text-[0.55rem] uppercase tracking-widest text-lumiere-ink/50">{g(s.shot_type)} · {g(s.movement)}</span>
                           <span className="font-mono text-[0.55rem] text-lumiere-ink/40">P{s.priority}{s.status === "captured" ? " · ✓" : ""}</span>
                         </div>
-                        <p className="text-sm mt-1">{g(s.action)}</p>
+                        {editingShot === s.shot_id ? (
+                          <div className="mt-2 space-y-2">
+                            <textarea data-testid={`shot-edit-action-${s.shot_id}`} rows={3} value={shotDraft} onChange={(e) => setShotDraft(e.target.value)}
+                              className="w-full text-sm bg-white border border-black/15 rounded-lg px-2 py-1.5 focus:outline-none focus:border-lumiere-ink" />
+                            <div className="flex gap-2">
+                              <button data-testid={`shot-save-${s.shot_id}`} onClick={saveShot} className="inline-flex items-center gap-1 bg-lumiere-ink text-lumiere-ivory px-3 py-1 rounded-full font-mono text-[0.55rem] uppercase tracking-widest"><Check size={11} /> {lang === "es" ? "Guardar" : "Save"}</button>
+                              <button onClick={() => setEditingShot(null)} className="inline-flex items-center gap-1 border border-black/15 text-lumiere-ink/60 px-3 py-1 rounded-full font-mono text-[0.55rem] uppercase tracking-widest"><X size={11} /> {lang === "es" ? "Cancelar" : "Cancel"}</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-sm mt-1">{g(s.action)}</p>
+                        )}
                         <div className="flex items-center gap-2 mt-2 text-lumiere-gold">
                           <Clock size={12} /><span className="font-mono text-[0.6rem] uppercase tracking-widest">{s.ideal_time_label ? `Golden · ${s.ideal_time_label}` : s.ideal_time_window}</span>
                         </div>

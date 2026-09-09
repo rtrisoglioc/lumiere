@@ -66,6 +66,11 @@ class BeatEdit(BaseModel):
     purpose: str = None
 
 
+class ShotEdit(BaseModel):
+    action: str = None
+    composition_note: str = None
+
+
 class ShotStatusIn(BaseModel):
     status: str
     skip_reason: str = None
@@ -253,6 +258,47 @@ async def delete_shot(shot_id: str, user: dict = Depends(get_current_user)):
     return {"ok": True}
 
 
+@v2_router.patch("/shots/{shot_id}")
+async def edit_shot(shot_id: str, body: ShotEdit, user: dict = Depends(get_current_user)):
+    shot = await db.shot_missions.find_one({"shot_id": shot_id}, {"_id": 0})
+    if not shot:
+        raise HTTPException(status_code=404, detail="shot_not_found")
+    await _exp(shot["experience_id"], user)
+    upd = {k: v for k, v in {"action": body.action, "composition_note": body.composition_note}.items() if v is not None}
+    if upd:
+        await db.shot_missions.update_one({"shot_id": shot_id}, {"$set": upd})
+    return {"ok": True}
+
+
+@v2_router.post("/shots/{shot_id}/regenerate")
+async def regenerate_shot(shot_id: str, user: dict = Depends(get_current_user)):
+    shot = await db.shot_missions.find_one({"shot_id": shot_id}, {"_id": 0})
+    if not shot:
+        raise HTTPException(status_code=404, detail="shot_not_found")
+    exp = await _exp(shot["experience_id"], user)
+    beat = await db.story_beats.find_one({"beat_id": shot.get("beat_id")}, {"_id": 0}) or {}
+    out, _ = await v2agents.regenerate_one_shot(exp, beat, shot.get("action"))
+    news = (out.get("shots") or []) if isinstance(out, dict) else []
+    if not news:
+        raise HTTPException(status_code=502, detail="regenerate_failed")
+    ns = news[0]
+    windows = sun_time.compute_windows(exp.get("location_lat"), exp.get("location_lng"), exp.get("start_date"))
+    window = sun_time.normalize_window(ns.get("ideal_time_window"))
+    computed = sun_time.resolve_time(window, windows)
+    upd = {"shot_type": _flat(ns.get("shot_type")) or shot.get("shot_type"),
+           "action": _flat(ns.get("action")) or shot.get("action"),
+           "movement": _flat(ns.get("movement")) or shot.get("movement"),
+           "composition_note": _flat(ns.get("composition_note")),
+           "duration_seconds": ns.get("duration_seconds", shot.get("duration_seconds", 6)),
+           "ideal_time_window": window, "ideal_time_computed": computed,
+           "ideal_time_label": sun_time.label_time(computed),
+           "narrative_purpose": _flat(ns.get("narrative_purpose")),
+           "priority": ns.get("priority", shot.get("priority", 3))}
+    await db.shot_missions.update_one({"shot_id": shot_id}, {"$set": upd})
+    updated = await db.shot_missions.find_one({"shot_id": shot_id}, {"_id": 0})
+    return {"shot": updated}
+
+
 @v2_router.patch("/beats/{beat_id}")
 async def edit_beat(beat_id: str, body: BeatEdit, user: dict = Depends(get_current_user)):
     beat = await db.story_beats.find_one({"beat_id": beat_id}, {"_id": 0})
@@ -286,8 +332,11 @@ async def translate_story(exp_id: str, to: str = "es", user: dict = Depends(get_
         raise HTTPException(status_code=400, detail="no_story")
     story = await db.story_plans.find_one({"experience_id": exp_id}, {"_id": 0})
     beats = await _beats(exp["story_id"])
+    shots = await db.shot_missions.find({"experience_id": exp_id}, {"_id": 0}).to_list(60)
     payload = {"title": (story or {}).get("title"), "premise": (story or {}).get("premise"),
-               "beats": [{"beat_id": b["beat_id"], "label": b.get("label"), "purpose": b.get("purpose")} for b in beats]}
+               "beats": [{"beat_id": b["beat_id"], "label": b.get("label"), "purpose": b.get("purpose")} for b in beats],
+               "shots": [{"shot_id": s.get("shot_id"), "action": s.get("action"),
+                          "composition_note": s.get("composition_note"), "narrative_purpose": s.get("narrative_purpose")} for s in shots]}
     out, _ = await v2agents.translate_story(exp_id, payload, to)
     if isinstance(out, dict):
         st = {}
@@ -306,6 +355,14 @@ async def translate_story(exp_id: str, to: str = "es", user: dict = Depends(get_
                 bset["purpose"] = _flat(tb["purpose"])
             if bid and bset:
                 await db.story_beats.update_one({"beat_id": bid}, {"$set": bset})
+        for ts in (out.get("shots") or []):
+            sid = ts.get("shot_id")
+            sset = {}
+            for f in ("action", "composition_note", "narrative_purpose"):
+                if ts.get(f):
+                    sset[f] = _flat(ts[f])
+            if sid and sset:
+                await db.shot_missions.update_one({"shot_id": sid}, {"$set": sset})
     return {"ok": True}
 
 

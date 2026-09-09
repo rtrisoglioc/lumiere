@@ -291,8 +291,40 @@ async def story_ideas(exp):
 
 
 TRANSLATE_SYS = """You are a professional translator. Translate ONLY the human-readable text
-fields (title, premise, label, purpose) into the target language. Keep beat_id values
-EXACTLY unchanged. Preserve tone. Return ONLY the same JSON structure you received."""
+fields into the target language: title, premise, and for each beat (label, purpose)
+and for each shot (action, composition_note, narrative_purpose). Keep beat_id and
+shot_id values EXACTLY unchanged. Preserve tone and structure. Return ONLY the same
+JSON structure you received (with the same keys, including the beats and shots arrays)."""
+
+
+CINE_ONE_SYS = """You are the Cinematographer Agent of LUMIÈRE.
+Generate exactly ONE executable shot mission for the given story beat, for a
+non-professional creator using a phone camera.
+
+Rules:
+- The mission must be executable in under 90 seconds of real effort.
+- action must be a physical instruction, not a creative adjective.
+- duration_seconds between 4 and 10.
+- ideal_time_window must be realistic for the shot's light needs.
+- narrative_purpose explains in one sentence what the edit will use it for.
+- If a previous confusing action is provided, produce a CLEARLY DIFFERENT approach.
+
+Return ONLY valid JSON: {"shots":[{"beat_sequence":int,"shot_type":string,
+"action":string,"movement":string,"composition_note":string,
+"duration_seconds":int,"ideal_time_window":string,"narrative_purpose":string,
+"priority":int}]}"""
+
+
+async def regenerate_one_shot(exp, beat, prev_action=None):
+    beat_min = {"sequence": beat.get("sequence"), "function": beat.get("function"),
+                "label": beat.get("label"), "purpose": beat.get("purpose"),
+                "criticality": beat.get("criticality")}
+    prompt = (f"Location: {exp.get('location_name')}. Target platform: {exp.get('target_platform')}.\n"
+              f"Story beat: {json.dumps(beat_min)}\n"
+              + (f"The creator found this previous shot confusing — produce a CLEARLY DIFFERENT alternative: {prev_action!r}\n" if prev_action else "")
+              + "Generate exactly ONE new shot mission for this beat.")
+    out, meta = await _run_and_trace(exp["id"], "Cinematographer", "regenerate_shot", CINE_ONE_SYS, prompt, model=PROXY_FAST)
+    return out, meta
 
 
 async def translate_story(exp_id, payload, to):
