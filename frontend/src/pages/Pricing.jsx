@@ -80,6 +80,9 @@ export default function Pricing() {
               <span className="font-display text-4xl font-black">{price === 0 ? t("freeLabel") : `$${price}`}</span>
               {price !== 0 && <span className="font-mono text-sm text-lumiere-ink/50 mb-1">{cycle === "monthly" ? t("perMonth") : t("perYear")}</span>}
             </div>
+            {p.id === "free" && (
+              <p data-testid="free-beta-note" className="mt-2 font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-iris">Beta: limits not enforced yet</p>
+            )}
             <ul className="mt-6 space-y-3">
               {p.features.map((f, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm">

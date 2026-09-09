@@ -14,14 +14,17 @@ export default function Create() {
   const [location, setLocation] = useState("");
   const [platform, setPlatform] = useState("cinematic");
   const [creating, setCreating] = useState(false);
+  const [notice, setNotice] = useState(null); // holds created exp id when soft limit hit
+
+  const goWorkspace = (expId) => { localStorage.setItem("lumiere_last_exp", expId); navigate(`/studio/${expId}`); };
 
   const create = async () => {
     if (!title.trim()) return;
     setCreating(true);
     try {
       const res = await api.post("/experiences", { title: title.trim(), type, location_name: location.trim() || null, target_platform: platform });
-      localStorage.setItem("lumiere_last_exp", res.data.id);
-      navigate(`/studio/${res.data.id}`);
+      if (res.data.soft_limit_notice) { setNotice(res.data.id); }
+      else { goWorkspace(res.data.id); }
     } catch { toast.error("Failed to create"); }
     finally { setCreating(false); }
   };
@@ -75,6 +78,26 @@ export default function Create() {
           </button>
         </div>
       </main>
+
+      {notice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" data-testid="soft-limit-modal">
+          <div className="bg-lumiere-warm border border-black/10 rounded-2xl max-w-md w-full p-7 shadow-2xl">
+            <p className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-gold mb-2">Beta</p>
+            <h3 className="font-display text-2xl font-bold mb-2">Free includes 1 experience</h3>
+            <p className="text-lumiere-ink/60 text-sm mb-6">You're on the beta — limits aren't enforced yet, so you can keep going. Join the waitlist to hear when plans go live.</p>
+            <div className="flex gap-2">
+              <button data-testid="soft-limit-waitlist" onClick={() => { toast.success("You're on the waitlist"); goWorkspace(notice); }}
+                className="flex-1 inline-flex items-center justify-center gap-2 border border-lumiere-ink/20 hover:border-lumiere-gold px-4 py-2.5 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">
+                Join waitlist
+              </button>
+              <button data-testid="soft-limit-continue" onClick={() => goWorkspace(notice)}
+                className="flex-1 inline-flex items-center justify-center gap-2 bg-lumiere-ink text-lumiere-ivory hover:bg-lumiere-ink/85 px-4 py-2.5 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">
+                Continue anyway (beta)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

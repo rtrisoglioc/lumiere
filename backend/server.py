@@ -268,8 +268,15 @@ async def create_experience(body: ExperienceIn, user: dict = Depends(get_current
         "completeness": None,
         "created_at": now_iso(),
     }
+    # Soft counter (Free = 1 experience). Informative only — NEVER blocks creation.
+    prior = 0
+    try:
+        prior = await db.experiences.count_documents({"owner": user["user_id"], "status": {"$ne": "trashed"}})
+    except Exception:
+        prior = 0
     await db.experiences.insert_one(dict(exp))
     exp.pop("_id", None)
+    exp["soft_limit_notice"] = prior >= 1
     return exp
 
 @api.get("/experiences")
