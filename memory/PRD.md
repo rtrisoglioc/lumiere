@@ -351,3 +351,9 @@ Prometheus `remote_write` push of LUMIÈRE agent metrics to Grafana Cloud. HARD 
 - Credentials (env, currently EMPTY placeholders in backend/.env → integration is a silent no-op until set): `GRAFANA_CLOUD_REMOTE_WRITE_URL`, `GRAFANA_CLOUD_INSTANCE_ID`, `GRAFANA_CLOUD_API_TOKEN` (Cloud Access Policy token, scope metrics:write).
 - Dep added: `cramjam==2.12.1` (frozen into requirements.txt).
 - Tested (`backend/test_grafana.py`, all PASS): allowlist (6 emitted, others skipped); protobuf+snappy roundtrip decodes to correct names/labels/values; monotonic counter + cumulative histogram across calls; completeness gauge; `_send` to an unreachable host returns WITHOUT raising (ConnectError only logged); not-configured no-op. Live regenerate flow through `_persist_run` unaffected.
+
+### Grafana Cloud — ACTIVATED + verified (2026-09-09). CODE FROZEN.
+- Credentials loaded in `backend/.env` (write token, stack-1718998, prometheus-prod-67-prod-us-west-0). `.env` confirmed in `.gitignore` (git check-ignore = ignored, NOT tracked → never reaches the public repo).
+- Ran a FULL live agent flow (new exp `1bb5b562...`): Director (6 beats) → Cinematographer (10 shots) → demo footage (4 clips) → Vision (4 analyzed) → Evaluator (completeness 56) → Editor + Render Worker (cut rendered). All six emission points fired.
+- Ingestion confirmed with NO 401/403: raw `remote_write` POST returned **HTTP 200**; the running app logged `GRAFANA_SEND_OK status=200 series=15` (temp debug, since reverted); zero "metrics dropped" warnings. (A read-query returns 401 only because the supplied token is `metrics:write`-scoped — not an ingestion issue.)
+- Dashboard: `grafana/lumiere_dashboard.json` (+ `grafana/README.md`) — panels: p95 duration/agent, agent failure rate, total calls by status, story completeness by experience; vars `datasource` + `agent`.
