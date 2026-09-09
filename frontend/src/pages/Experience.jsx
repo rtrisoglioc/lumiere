@@ -62,11 +62,17 @@ export default function Experience() {
     setBusy("story");
     try {
       await api.post(`/v2/experiences/${id}/intent`, { feeling_tags: feelings, free_text: freeText, creator_presence: presence });
+    } catch { toast.error("Couldn't save your intent — please try again"); setBusy(""); return; }
+    try {
       await api.post(`/v2/experiences/${id}/story`);
+    } catch { toast.error("Story generation failed — please try again"); await load(); setBusy(""); return; }
+    await load();  // story + beats are saved and now visible even if shots lag
+    toast.success("Story ready");
+    try {
       await api.post(`/v2/experiences/${id}/shots`);
       await load();
-      toast.success("Story & shot list ready");
-    } catch { toast.error("Story generation failed"); } finally { setBusy(""); }
+    } catch { toast.warning("Shot list didn't finish — tap ↻ to retry"); }
+    setBusy("");
   };
 
   const genShots = async () => { setBusy("shots"); try { await api.post(`/v2/experiences/${id}/shots`); await load(); toast.success("Shots ready"); } catch { toast.error("Failed"); } finally { setBusy(""); } };
