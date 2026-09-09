@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Plus, ArrowUpRight, Play, Film, Gauge } from "lucide-react";
+import { Plus, ArrowUpRight, Play, Film, Gauge, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useI18n } from "@/i18n";
@@ -9,6 +9,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Header } from "@/components/Header";
 import { LoopStrip } from "@/components/LoopStrip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 
 const TYPES = ["travel", "event", "lifestyle"];
@@ -28,6 +29,8 @@ export default function Home() {
   const [title, setTitle] = useState("");
   const [type, setType] = useState("travel");
   const [creating, setCreating] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = async () => {
     try {
@@ -52,6 +55,19 @@ export default function Home() {
   const plan = account?.plan;
   const usage = account?.usage;
   const limits = account?.limits;
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/experiences/${pendingDelete.id}`);
+      setExperiences((prev) => prev.filter((e) => e.id !== pendingDelete.id));
+      setPendingDelete(null);
+      toast.success(t("deletedExp"));
+      load();
+    } catch { toast.error("Error"); }
+    finally { setDeleting(false); }
+  };
 
   return (
     <div className="min-h-screen bg-lumiere-ivory text-lumiere-ink">
@@ -80,6 +96,11 @@ export default function Home() {
               <div className="relative overflow-hidden rounded-2xl border border-black/10 group">
                 <img src={IMGS[active.type] || IMGS.travel} alt="" className="w-full h-64 object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-lumiere-ink/80 via-lumiere-ink/20 to-transparent" />
+                <button data-testid={`delete-active-${active.id}`} onClick={() => setPendingDelete(active)}
+                  title={t("deleteExp")}
+                  className="absolute top-3 right-3 w-9 h-9 flex items-center justify-center rounded-full bg-lumiere-ink/50 backdrop-blur text-lumiere-ivory/80 hover:bg-red-600 hover:text-white transition-colors">
+                  <Trash2 size={16} />
+                </button>
                 <div className="absolute bottom-0 left-0 p-6">
                   <span className="font-mono text-xs uppercase tracking-widest text-lumiere-gold">{active.type} · {active.stage}</span>
                   <h2 className="font-display text-3xl font-bold text-lumiere-ivory mt-1">{active.title}</h2>
@@ -139,21 +160,27 @@ export default function Home() {
             ) : (
               <div className="grid sm:grid-cols-2 gap-4">
                 {experiences.map((exp, i) => (
-                  <motion.button key={exp.id} data-testid={`experience-card-${exp.id}`}
+                  <motion.div key={exp.id} data-testid={`experience-card-${exp.id}`}
                     initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
-                    onClick={() => navigate(`/studio/${exp.id}`)}
-                    className="group text-left rounded-2xl overflow-hidden border border-black/10 hover:border-lumiere-gold/60 transition-colors bg-lumiere-warm">
-                    <div className="relative h-40 overflow-hidden">
-                      <img src={IMGS[exp.type] || IMGS.travel} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                    </div>
-                    <div className="p-5">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-display text-xl font-bold">{exp.title}</h3>
-                        <ArrowUpRight size={16} className="text-lumiere-ink/30 group-hover:text-lumiere-gold transition-colors" />
+                    className="group relative text-left rounded-2xl overflow-hidden border border-black/10 hover:border-lumiere-gold/60 transition-colors bg-lumiere-warm">
+                    <button data-testid={`delete-experience-${exp.id}`}
+                      onClick={(e) => { e.stopPropagation(); setPendingDelete(exp); }} title={t("deleteExp")}
+                      className="absolute top-3 right-3 z-10 w-9 h-9 flex items-center justify-center rounded-full bg-lumiere-ink/50 backdrop-blur text-lumiere-ivory/80 hover:bg-red-600 hover:text-white opacity-0 group-hover:opacity-100 transition-all">
+                      <Trash2 size={16} />
+                    </button>
+                    <button onClick={() => navigate(`/studio/${exp.id}`)} className="block w-full text-left">
+                      <div className="relative h-40 overflow-hidden">
+                        <img src={IMGS[exp.type] || IMGS.travel} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                       </div>
-                      <p className="font-mono text-xs text-lumiere-ink/50 mt-1 uppercase">{exp.type} · {exp.stage}</p>
-                    </div>
-                  </motion.button>
+                      <div className="p-5">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-display text-xl font-bold">{exp.title}</h3>
+                          <ArrowUpRight size={16} className="text-lumiere-ink/30 group-hover:text-lumiere-gold transition-colors" />
+                        </div>
+                        <p className="font-mono text-xs text-lumiere-ink/50 mt-1 uppercase">{exp.type} · {exp.stage}</p>
+                      </div>
+                    </button>
+                  </motion.div>
                 ))}
               </div>
             )}
@@ -202,6 +229,24 @@ export default function Home() {
           </button>
         </aside>
       </main>
+
+      <AlertDialog open={!!pendingDelete} onOpenChange={(o) => { if (!o) setPendingDelete(null); }}>
+        <AlertDialogContent data-testid="delete-experience-dialog" className="bg-lumiere-warm border border-black/10 text-lumiere-ink">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display text-2xl">{t("deleteExpTitle")}</AlertDialogTitle>
+            <AlertDialogDescription className="text-lumiere-ink/60">
+              {pendingDelete ? <span className="font-semibold">{pendingDelete.title}</span> : null} — {t("deleteExpBody")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="delete-cancel" className="rounded-full">{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction data-testid="delete-confirm" onClick={confirmDelete} disabled={deleting}
+              className="rounded-full bg-red-600 hover:bg-red-700 text-white">
+              {deleting ? "…" : t("deleteExp")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

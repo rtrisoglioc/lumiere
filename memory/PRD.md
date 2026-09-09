@@ -357,3 +357,9 @@ Prometheus `remote_write` push of LUMIÈRE agent metrics to Grafana Cloud. HARD 
 - Ran a FULL live agent flow (new exp `1bb5b562...`): Director (6 beats) → Cinematographer (10 shots) → demo footage (4 clips) → Vision (4 analyzed) → Evaluator (completeness 56) → Editor + Render Worker (cut rendered). All six emission points fired.
 - Ingestion confirmed with NO 401/403: raw `remote_write` POST returned **HTTP 200**; the running app logged `GRAFANA_SEND_OK status=200 series=15` (temp debug, since reverted); zero "metrics dropped" warnings. (A read-query returns 401 only because the supplied token is `metrics:write`-scoped — not an ingestion issue.)
 - Dashboard: `grafana/lumiere_dashboard.json` (+ `grafana/README.md`) — panels: p95 duration/agent, agent failure rate, total calls by status, story completeness by experience; vars `datasource` + `agent`.
+
+### Delete experiences from Home (2026-09-09) — DONE, self-tested (curl + screenshot)
+User request: "Deberían poder eliminarse los videos que aparecen aquí" (the experience cards on Home/Studio).
+- Reused existing `DELETE /api/experiences/{exp_id}` (soft-trash by default: sets status=trashed, preserves originals, removes from list + frees the plan counter which filters status!=trashed).
+- Frontend `Home.jsx`: trash button on the Active Experience card (`delete-active-<id>`) and on each Recent card (`delete-experience-<id>`, shown on hover; recent card refactored from `motion.button` to `motion.div` + inner nav button to avoid nested buttons). Bilingual confirm via shadcn `AlertDialog` (`delete-experience-dialog`, `delete-confirm`/`delete-cancel`). i18n keys added (deleteExp/deleteExpTitle/deleteExpBody/deletedExp, EN+ES).
+- Verified: create→delete→gone from `/experiences` (returns `experience_trash`); confirm dialog + buttons render on Home (screenshot).
