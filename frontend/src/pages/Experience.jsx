@@ -237,7 +237,7 @@ export default function Experience() {
         )}
 
         {/* ---------------- DURING ---------------- */}
-        {tab === "during" && <LiveDirector id={id} beats={beats} onAction={setShot} reload={load} />}
+        {tab === "during" && <LiveDirector id={id} beats={beats} onAction={setShot} reload={load} onGoAfter={() => setTab("after")} />}
 
         {/* ---------------- AFTER ---------------- */}
         {tab === "after" && (
@@ -393,7 +393,7 @@ function Bar({ label, v = 0 }) {
   );
 }
 
-function LiveDirector({ id, beats, onAction, reload }) {
+function LiveDirector({ id, beats, onAction, reload, onGoAfter }) {
   const [data, setData] = useState(null);
   const load = useCallback(async () => { try { const r = await api.get(`/v2/experiences/${id}/next-shot`); setData(r.data); } catch { /* */ } }, [id]);
   useEffect(() => { load(); }, [load]);
@@ -405,6 +405,10 @@ function LiveDirector({ id, beats, onAction, reload }) {
       <Check size={32} className="mx-auto text-lumiere-sage mb-3" />
       <h2 className="font-display text-2xl">All missions handled.</h2>
       <p className="text-lumiere-ink/55 mt-1">Head to After to upload and build your film.</p>
+      <button data-testid="during-go-after" onClick={onGoAfter}
+        className="mt-6 inline-flex items-center gap-2 bg-lumiere-ink text-lumiere-ivory hover:bg-lumiere-ink/85 px-6 py-3 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">
+        Go to After <ArrowRight size={15} />
+      </button>
     </div>
   );
   const p = data.progress || {};
