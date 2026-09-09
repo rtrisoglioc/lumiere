@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   Loader2, Upload, Sparkles, Film, Wand2, ArrowRight, Check, SkipForward,
-  Clock, MapPin, AlertTriangle, Camera, RefreshCw, ChevronRight, Activity, Share2, Copy,
+  Clock, MapPin, AlertTriangle, Camera, RefreshCw, ChevronRight, Activity, Share2, Copy, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, API, getToken } from "@/lib/api";
@@ -87,6 +87,8 @@ export default function Experience() {
   };
 
   const analyze = async () => { setBusy("analyze"); try { const r = await api.post(`/v2/experiences/${id}/analyze`); await load(); setTab("after"); toast.success(`Story completeness: ${r.data.completeness.score}`); } catch { toast.error("Analysis failed"); } finally { setBusy(""); } };
+
+  const deleteAsset = async (assetId) => { try { await api.delete(`/v2/experiences/${id}/assets/${assetId}`); await load(); toast.success("Clip removed"); } catch { toast.error("Couldn't remove clip"); } };
 
   const getTheShot = async (gapId) => { setBusy("gap"); try { await api.post(`/v2/gaps/${gapId}/mission`); await load(); setTab("during"); toast("Go get the shot — back to directing", { icon: "🎬" }); } catch { toast.error("Failed"); } finally { setBusy(""); } };
 
@@ -262,9 +264,13 @@ export default function Experience() {
               {assets.length > 0 && (
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-4">
                   {assets.map((a) => (
-                    <div key={a.id} className="rounded-lg overflow-hidden border border-black/10 bg-black aspect-video relative">
+                    <div key={a.id} className="group rounded-lg overflow-hidden border border-black/10 bg-black aspect-video relative">
                       <video src={fileUrl(a.storage_path)} className="w-full h-full object-cover" muted />
                       <span className={`absolute bottom-1 left-1 font-mono text-[0.45rem] uppercase px-1 rounded ${a.status === "analyzed" ? "bg-lumiere-sage/80 text-white" : "bg-black/60 text-white"}`}>{a.status}</span>
+                      <button data-testid={`delete-asset-${a.id}`} onClick={() => deleteAsset(a.id)}
+                        className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center rounded-full bg-black/60 text-white/90 hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove clip">
+                        <Trash2 size={12} />
+                      </button>
                     </div>
                   ))}
                 </div>

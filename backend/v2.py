@@ -503,6 +503,22 @@ async def set_shot_status(shot_id: str, body: ShotStatusIn, user: dict = Depends
     return {"ok": True, "alternative": alternative}
 
 
+@v2_router.delete("/experiences/{exp_id}/assets/{asset_id}")
+async def delete_asset(exp_id: str, asset_id: str, user: dict = Depends(get_current_user)):
+    exp = await _exp(exp_id, user)
+    res = await db.media_assets.delete_one({"id": asset_id, "experience_id": exp_id, "owner": user["user_id"]})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="asset_not_found")
+    await db.media_segments.delete_many({"asset_id": asset_id, "experience_id": exp_id})
+    result = None
+    if exp.get("story_id"):
+        try:
+            result, _ = await _recompute(exp_id, exp["story_id"])
+        except Exception as e:
+            logger.warning(f"recompute after delete failed: {e}")
+    return {"ok": True, "completeness": result}
+
+
 # ---------------- AFTER: build + revise ----------------
 def _resolver_factory(exp_id, assets_by_id):
     def resolver(asset_id):
