@@ -29,3 +29,4 @@ emergentintegrations==0.2.0
 google-genai==2.20.0
 google-auth==2.47.0
 Pillow>=10.0.0
+astral==3.2

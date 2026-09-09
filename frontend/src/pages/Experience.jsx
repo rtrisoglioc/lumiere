@@ -1,607 +1,380 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import { toast } from "sonner";
+import { motion } from "framer-motion";
 import {
-  Clapperboard, Camera, Gauge, Scissors, Terminal, Upload, Sparkles,
-  Play, AlertTriangle, Wand2, Loader2, Film, X, Trash2,
+  Loader2, Upload, Sparkles, Film, Wand2, ArrowRight, Check, SkipForward,
+  Clock, MapPin, AlertTriangle, Camera, RefreshCw, ChevronRight, Activity,
 } from "lucide-react";
-import { api, fileUrl } from "@/lib/api";
-import { useI18n } from "@/i18n";
-import { bl } from "@/lib/bilingual";
+import { toast } from "sonner";
+import { api, API, getToken } from "@/lib/api";
 import { Header } from "@/components/Header";
-import { StatusBadge, ProcessTimeline } from "@/components/StatusBadge";
-import { CircularScore, ScoreBar } from "@/components/CircularScore";
-import { AgentTrace } from "@/components/AgentTrace";
-import { MusicPicker } from "@/components/MusicPicker";
-import { OrchestratorPanel } from "@/components/OrchestratorPanel";
-import { MediaActions } from "@/components/MediaActions";
-import { CutEditor } from "@/components/CutEditor";
+import { PhaseIndicator } from "@/components/PhaseIndicator";
+import { CircularScore } from "@/components/CircularScore";
 
-const TABS = [
-  { id: "story", icon: Clapperboard },
-  { id: "capture", icon: Camera },
-  { id: "evaluate", icon: Gauge },
-  { id: "edit", icon: Scissors },
-  { id: "trace", icon: Terminal },
-];
+const MOODS = ["curious", "free", "elegant", "warm", "energetic", "intimate", "nostalgic", "bold"];
+const PRESENCE = ["none", "minimal", "balanced", "protagonist"];
+const STYLES = ["cinematic", "social", "story"];
+const g = (v) => (v && typeof v === "object" ? v.en || v.es || "" : v || "");
+const cov = { covered: "text-lumiere-sage border-lumiere-sage/50", partial: "text-lumiere-gold border-lumiere-gold/50", empty: "text-lumiere-ink/40 border-lumiere-ink/15" };
 
-function UploadButton({ expId, missionId, label, onStart, testid, variant = "ghost" }) {
-  const ref = useRef();
-  const [busy, setBusy] = useState(false);
-  const handle = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setBusy(true);
-    const form = new FormData();
-    form.append("file", file);
-    if (missionId) form.append("mission_id", missionId);
+export default function Experience() {
+  const { id } = useParams();
+  const [state, setState] = useState(null);
+  const [busy, setBusy] = useState("");
+  const [tab, setTab] = useState(null);
+  const fileRef = useRef();
+  const [revText, setRevText] = useState("");
+  const [trace, setTrace] = useState(null);
+
+  // intent form
+  const [feelings, setFeelings] = useState([]);
+  const [freeText, setFreeText] = useState("");
+  const [presence, setPresence] = useState("balanced");
+
+  const load = useCallback(async () => {
     try {
-      await api.post(`/experiences/${expId}/upload`, form, { headers: { "Content-Type": "multipart/form-data" } });
-      toast.success("Uploaded — analyzing");
-      onStart?.();
-    } catch {
-      toast.error("Upload failed");
-    } finally {
-      setBusy(false);
-      if (ref.current) ref.current.value = "";
-    }
+      const r = await api.get(`/v2/experiences/${id}/state`);
+      setState(r.data);
+      if (tab === null) setTab(r.data.experience?.phase || "before");
+      localStorage.setItem("lumiere_last_exp", id);
+    } catch { toast.error("Failed to load"); }
+  }, [id, tab]);
+  useEffect(() => { load(); }, [id]); // eslint-disable-line
+
+  const exp = state?.experience;
+  const story = state?.story;
+  const beats = state?.beats || [];
+  const shots = state?.shots || [];
+  const assets = state?.assets || [];
+  const gaps = state?.gaps || [];
+  const cuts = state?.cuts || [];
+  const c = state?.completeness;
+
+  const doIntentStory = async () => {
+    if (feelings.length === 0) { toast.error("Pick at least one mood"); return; }
+    setBusy("story");
+    try {
+      await api.post(`/v2/experiences/${id}/intent`, { feeling_tags: feelings, free_text: freeText, creator_presence: presence });
+      await api.post(`/v2/experiences/${id}/story`);
+      await api.post(`/v2/experiences/${id}/shots`);
+      await load();
+      toast.success("Story & shot list ready");
+    } catch { toast.error("Story generation failed"); } finally { setBusy(""); }
   };
-  const cls = variant === "primary"
-    ? "bg-lumiere-orange hover:bg-lumiere-orangeHover text-white"
-    : "border border-white/20 text-white hover:border-lumiere-orange";
-  return (
-    <>
-      <input ref={ref} type="file" accept="video/*,image/*" className="hidden" onChange={handle} data-testid={`${testid}-input`} />
-      <button data-testid={testid} disabled={busy} onClick={() => ref.current?.click()}
-        className={`inline-flex items-center gap-2 px-4 py-2.5 font-mono text-xs uppercase tracking-widest transition-colors duration-300 disabled:opacity-50 ${cls}`}>
-        {busy ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} {label}
-      </button>
-    </>
+
+  const genShots = async () => { setBusy("shots"); try { await api.post(`/v2/experiences/${id}/shots`); await load(); toast.success("Shots ready"); } catch { toast.error("Failed"); } finally { setBusy(""); } };
+
+  const upload = async (files) => {
+    if (!files?.length) return;
+    setBusy("upload");
+    try {
+      for (const f of files) { const fd = new FormData(); fd.append("file", f); await api.post(`/v2/experiences/${id}/upload`, fd, { headers: { "Content-Type": "multipart/form-data" } }); }
+      await load(); toast.success(`${files.length} clip(s) uploaded`);
+    } catch { toast.error("Upload failed"); } finally { setBusy(""); }
+  };
+
+  const analyze = async () => { setBusy("analyze"); try { const r = await api.post(`/v2/experiences/${id}/analyze`); await load(); setTab("after"); toast.success(`Story completeness: ${r.data.completeness.score}`); } catch { toast.error("Analysis failed"); } finally { setBusy(""); } };
+
+  const getTheShot = async (gapId) => { setBusy("gap"); try { await api.post(`/v2/gaps/${gapId}/mission`); await load(); setTab("during"); toast("Go get the shot — back to directing", { icon: "🎬" }); } catch { toast.error("Failed"); } finally { setBusy(""); } };
+
+  const setShot = async (shotId, status, reason) => {
+    try { const r = await api.post(`/v2/shots/${shotId}/status`, { status, skip_reason: reason }); await load();
+      if (r.data.alternative) toast("No problem. Here's another way to tell that part.", { icon: "↻" });
+    } catch { toast.error("Failed"); }
+  };
+
+  const build = async (style) => { setBusy("build"); try { await api.post(`/v2/experiences/${id}/build`, { style }); await load(); toast.success("Film rendered"); } catch (e) { toast.error("Render failed"); } finally { setBusy(""); } };
+
+  const revise = async (cutId) => { if (!revText.trim()) return; setBusy("revise"); try { await api.post(`/v2/cuts/${cutId}/revise`, { instruction: revText.trim() }); setRevText(""); await load(); toast.success("New version created"); } catch { toast.error("Revision failed"); } finally { setBusy(""); } };
+
+  const loadTrace = async () => { try { const r = await api.get(`/v2/experiences/${id}/trace`); setTrace(r.data); } catch { /* */ } };
+
+  const fileUrl = (path) => `${API}/files/${path}?auth=${encodeURIComponent(getToken() || "")}`;
+
+  if (!state) return <div className="min-h-screen bg-lumiere-ivory flex items-center justify-center"><Loader2 className="animate-spin text-lumiere-gold" /></div>;
+
+  const Tab = ({ k, label }) => (
+    <button data-testid={`tab-${k}`} onClick={() => setTab(k)}
+      className={`px-4 py-2 rounded-full font-mono text-[0.65rem] uppercase tracking-widest transition-colors ${tab === k ? "bg-lumiere-ink text-lumiere-ivory" : "text-lumiere-ink/50 hover:text-lumiere-ink border border-lumiere-ink/15"}`}>{label}</button>
   );
-}
 
-function errMsg(e, fallback) {
-  const d = e?.response?.data?.detail;
-  if (typeof d === "string") return d;
-  if (Array.isArray(d)) return d.map((x) => x?.msg || "").filter(Boolean).join("; ") || fallback;
-  if (d && typeof d === "object") return d.msg || fallback;
-  return fallback;
-}
-
-function VideoMonitor({ storagePath, testid }) {
   return (
-    <div className="viewfinder border border-white/15 bg-black p-2" data-testid={testid}>
-      <span className="vf-bl" /><span className="vf-br" />
-      <video src={fileUrl(storagePath)} controls playsInline className="w-full aspect-video bg-black" />
+    <div className="min-h-screen bg-lumiere-ivory text-lumiere-ink">
+      <Header back />
+      <div className="sticky top-[64px] z-30 bg-lumiere-ivory/90 backdrop-blur border-b border-black/5 px-4 sm:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
+        <PhaseIndicator phase={exp?.phase || "before"} />
+        <div className="flex items-center gap-2">
+          <Tab k="before" label="Before" /><Tab k="during" label="During" /><Tab k="after" label="After" />
+        </div>
+      </div>
+
+      <main className="px-4 sm:px-8 lg:px-16 py-8 max-w-6xl mx-auto" data-testid="experience-workspace">
+        <div className="flex items-baseline justify-between mb-6">
+          <div>
+            <p className="font-mono text-xs uppercase tracking-[0.2em] text-lumiere-iris">{exp?.type} · {exp?.location_name || "—"}</p>
+            <h1 className="font-display text-3xl sm:text-4xl font-black">{g(story?.title) || exp?.title}</h1>
+            {story?.premise && <p className="text-lumiere-ink/60 mt-2 max-w-2xl">{g(story.premise)}</p>}
+          </div>
+        </div>
+
+        {/* ---------------- BEFORE ---------------- */}
+        {tab === "before" && (
+          <div data-testid="phase-before-content" className="space-y-8">
+            {!story ? (
+              <div className="rounded-2xl border border-black/10 bg-lumiere-warm p-7 max-w-2xl" data-testid="intent-form">
+                <p className="font-mono text-xs uppercase tracking-widest text-lumiere-gold mb-1">Story Intent</p>
+                <h2 className="font-display text-2xl mb-4">What do you want this experience to feel like?</h2>
+                <div className="flex flex-wrap gap-2 mb-5">
+                  {MOODS.map((m) => (
+                    <button key={m} data-testid={`mood-${m}`} onClick={() => setFeelings((f) => f.includes(m) ? f.filter((x) => x !== m) : f.length < 3 ? [...f, m] : f)}
+                      className={`px-3.5 py-1.5 rounded-full font-mono text-[0.65rem] uppercase tracking-widest border transition-colors ${feelings.includes(m) ? "bg-lumiere-gold border-lumiere-gold text-lumiere-ink" : "border-black/15 text-lumiere-ink/60 hover:border-lumiere-gold"}`}>{m}</button>
+                  ))}
+                </div>
+                <textarea data-testid="intent-freetext" value={freeText} onChange={(e) => setFreeText(e.target.value)} rows={2} placeholder="Optional: a sentence about the story you want…"
+                  className="w-full bg-white border border-black/15 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-lumiere-gold resize-none mb-4" />
+                <div className="mb-5">
+                  <label className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/50 block mb-2">Creator presence</label>
+                  <div className="flex gap-2">
+                    {PRESENCE.map((p) => (
+                      <button key={p} data-testid={`presence-${p}`} onClick={() => setPresence(p)}
+                        className={`px-3 py-1.5 rounded-full font-mono text-[0.6rem] uppercase tracking-widest border capitalize transition-colors ${presence === p ? "bg-lumiere-iris border-lumiere-iris text-white" : "border-black/15 text-lumiere-ink/60"}`}>{p}</button>
+                    ))}
+                  </div>
+                </div>
+                <button data-testid="create-story-button" onClick={doIntentStory} disabled={busy === "story"}
+                  className="inline-flex items-center gap-2 bg-lumiere-ink text-lumiere-ivory hover:bg-lumiere-ink/85 disabled:opacity-50 px-6 py-3 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">
+                  {busy === "story" ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} Create my story
+                </button>
+                {busy === "story" && <p className="text-sm text-lumiere-ink/50 mt-3 animate-pulse">Understanding your intent… Building the arc… Planning the moments…</p>}
+              </div>
+            ) : (
+              <>
+                <div>
+                  <p className="font-mono text-xs uppercase tracking-widest text-lumiere-ink/50 mb-3">Story arc · {beats.length} beats</p>
+                  <div className="flex gap-3 overflow-x-auto pb-3" data-testid="beats-strip">
+                    {beats.map((b) => (
+                      <div key={b.beat_id} data-testid={`beat-${b.sequence}`} className="min-w-[220px] rounded-xl border border-black/10 bg-lumiere-warm p-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-mono text-[0.55rem] uppercase tracking-widest text-lumiere-iris">{b.function}</span>
+                          <span className={`font-mono text-[0.5rem] uppercase tracking-widest border rounded-full px-1.5 py-0.5 ${b.criticality === "critical" ? "text-lumiere-gold border-lumiere-gold/50" : "text-lumiere-ink/40 border-black/15"}`}>{b.criticality}</span>
+                        </div>
+                        <h3 className="font-display text-lg leading-tight">{g(b.label)}</h3>
+                        <p className="text-xs text-lumiere-ink/55 mt-1 line-clamp-3">{g(b.purpose)}</p>
+                        <span className={`inline-block mt-2 font-mono text-[0.5rem] uppercase tracking-widest border rounded-full px-1.5 py-0.5 ${cov[b.coverage_status] || cov.empty}`}>{b.coverage_status}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="font-mono text-xs uppercase tracking-widest text-lumiere-ink/50">Shot list · {shots.length}</p>
+                    <button data-testid="regen-shots" onClick={genShots} disabled={busy === "shots"} className="text-lumiere-ink/50 hover:text-lumiere-ink"><RefreshCw size={14} className={busy === "shots" ? "animate-spin" : ""} /></button>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-3" data-testid="shots-list">
+                    {shots.map((s) => (
+                      <div key={s.shot_id} data-testid={`shot-${s.shot_id}`} className="rounded-xl border border-black/10 bg-lumiere-warm p-4">
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-[0.55rem] uppercase tracking-widest text-lumiere-ink/50">{g(s.shot_type)} · {g(s.movement)}</span>
+                          <span className="font-mono text-[0.55rem] text-lumiere-ink/40">P{s.priority}{s.status === "captured" ? " · ✓" : ""}</span>
+                        </div>
+                        <p className="text-sm mt-1">{g(s.action)}</p>
+                        <div className="flex items-center gap-2 mt-2 text-lumiere-gold">
+                          <Clock size={12} /><span className="font-mono text-[0.6rem] uppercase tracking-widest">{s.ideal_time_label ? `Golden · ${s.ideal_time_label}` : s.ideal_time_window}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button data-testid="go-capture" onClick={() => setTab("during")} className="mt-5 inline-flex items-center gap-2 bg-lumiere-iris text-white hover:bg-lumiere-irisHover px-5 py-2.5 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">
+                    <Camera size={14} /> Start directing
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ---------------- DURING ---------------- */}
+        {tab === "during" && <LiveDirector id={id} beats={beats} onAction={setShot} reload={load} />}
+
+        {/* ---------------- AFTER ---------------- */}
+        {tab === "after" && (
+          <div data-testid="phase-after-content" className="space-y-8">
+            <div className="rounded-2xl border border-black/10 bg-lumiere-warm p-6">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <p className="font-mono text-xs uppercase tracking-widest text-lumiere-ink/50 mb-1">Footage · {assets.length} clip(s)</p>
+                  <p className="text-sm text-lumiere-ink/55">Upload what you captured. LUMIÈRE analyzes it against your story.</p>
+                </div>
+                <div className="flex gap-2">
+                  <input ref={fileRef} type="file" accept="video/*" multiple className="hidden" onChange={(e) => upload(Array.from(e.target.files || []))} data-testid="upload-input" />
+                  <button data-testid="upload-button" onClick={() => fileRef.current?.click()} disabled={busy === "upload"} className="inline-flex items-center gap-2 border border-lumiere-ink/20 hover:border-lumiere-iris px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">
+                    {busy === "upload" ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} Upload
+                  </button>
+                  <button data-testid="analyze-button" onClick={analyze} disabled={busy === "analyze" || assets.length === 0} className="inline-flex items-center gap-2 bg-lumiere-ink text-lumiere-ivory hover:bg-lumiere-ink/85 disabled:opacity-50 px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">
+                    {busy === "analyze" ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Analyze
+                  </button>
+                </div>
+              </div>
+              {assets.length > 0 && (
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mt-4">
+                  {assets.map((a) => (
+                    <div key={a.id} className="rounded-lg overflow-hidden border border-black/10 bg-black aspect-video relative">
+                      <video src={fileUrl(a.storage_path)} className="w-full h-full object-cover" muted />
+                      <span className={`absolute bottom-1 left-1 font-mono text-[0.45rem] uppercase px-1 rounded ${a.status === "analyzed" ? "bg-lumiere-sage/80 text-white" : "bg-black/60 text-white"}`}>{a.status}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {c && (
+              <div className="grid md:grid-cols-[auto_1fr] gap-6 items-center rounded-2xl border border-black/10 bg-lumiere-warm p-6" data-testid="completeness-panel">
+                <CircularScore value={c.score} label="Story completeness" testid="completeness-score" />
+                <div className="space-y-2">
+                  <Bar label="Narrative" v={c.narrative} /><Bar label="Visual" v={c.visual} /><Bar label="Emotional" v={c.emotional} />
+                  <p className="font-mono text-[0.6rem] uppercase tracking-widest mt-2 text-lumiere-ink/50">
+                    Critical beats {c.critical_covered}/{c.critical_total} · <span className={c.status === "COMPLETE" ? "text-lumiere-sage" : "text-lumiere-gold"}>{c.status}</span>
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {gaps.length > 0 && (
+              <div className="rounded-2xl border-2 border-lumiere-iris/40 bg-lumiere-iris/5 p-7" data-testid="missing-shot">
+                <p className="font-mono text-xs uppercase tracking-widest text-lumiere-iris mb-1">The film needs one more thing</p>
+                <h2 className="font-display text-2xl">Your film is almost ready.</h2>
+                <p className="text-lumiere-ink/60 mt-1">One final shot could make it stronger.</p>
+                <div className="mt-4 space-y-3">
+                  {gaps.map((gp) => (
+                    <div key={gp.gap_id} data-testid={`gap-${gp.gap_id}`} className="rounded-xl border border-black/10 bg-lumiere-warm p-4 flex items-center justify-between gap-4">
+                      <div>
+                        <span className="font-mono text-[0.55rem] uppercase tracking-widest text-lumiere-gold">Missing: {gp.missing_function}</span>
+                        <p className="text-sm mt-0.5">{g(gp.why_it_matters)}</p>
+                      </div>
+                      <button data-testid={`get-the-shot-${gp.gap_id}`} onClick={() => getTheShot(gp.gap_id)} disabled={busy === "gap"}
+                        className="shrink-0 inline-flex items-center gap-2 bg-lumiere-iris text-white hover:bg-lumiere-irisHover px-5 py-2.5 rounded-full font-mono text-xs uppercase tracking-widest transition-colors shadow-[0_0_18px_rgba(114,103,168,0.35)]">
+                        {busy === "gap" ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />} Get the shot
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <p className="font-mono text-xs uppercase tracking-widest text-lumiere-ink/50">Your film</p>
+                <div className="flex gap-2">
+                  {STYLES.map((st) => (
+                    <button key={st} data-testid={`build-${st}`} onClick={() => build(st)} disabled={busy === "build"}
+                      className="inline-flex items-center gap-1.5 border border-lumiere-ink/20 hover:border-lumiere-gold px-3 py-1.5 rounded-full font-mono text-[0.6rem] uppercase tracking-widest capitalize transition-colors">
+                      {busy === "build" ? <Loader2 size={12} className="animate-spin" /> : <Film size={12} />} {st}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {cuts.length === 0 ? (
+                <div className="border border-dashed border-black/15 rounded-2xl py-14 text-center text-lumiere-ink/50">Build your film once footage is analyzed.</div>
+              ) : (
+                <div className="space-y-4" data-testid="cuts-list">
+                  {cuts.map((cut, i) => (
+                    <div key={cut.cut_id} data-testid={`cut-${cut.cut_id}`} className="rounded-2xl border border-black/10 bg-lumiere-warm overflow-hidden">
+                      <div className="flex items-center gap-2 px-4 py-2 border-b border-black/5">
+                        <span className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/60">v{i + 1} · {cut.style} · {Math.round(cut.actual_duration)}s</span>
+                        {cut.parent_cut_id && <span className="font-mono text-[0.55rem] text-lumiere-iris">↳ revision</span>}
+                      </div>
+                      <video src={fileUrl(cut.storage_path)} controls className="w-full bg-black max-h-[380px]" data-testid={`cut-player-${cut.cut_id}`} />
+                      <div className="p-4 flex gap-2">
+                        <input data-testid="revise-input" value={revText} onChange={(e) => setRevText(e.target.value)} placeholder='e.g. "make it faster, less of me"'
+                          className="flex-1 bg-white border border-black/15 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-lumiere-iris" />
+                        <button data-testid={`revise-${cut.cut_id}`} onClick={() => revise(cut.cut_id)} disabled={busy === "revise"}
+                          className="inline-flex items-center gap-2 bg-lumiere-ink text-lumiere-ivory hover:bg-lumiere-ink/85 px-4 py-2 rounded-full font-mono text-xs uppercase tracking-widest transition-colors">
+                          {busy === "revise" ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />} Revise
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ---------------- AGENT TRACE ---------------- */}
+        <div className="mt-12 border-t border-black/10 pt-6">
+          <button data-testid="trace-toggle" onClick={() => (trace ? setTrace(null) : loadTrace())} className="inline-flex items-center gap-2 font-mono text-[0.65rem] uppercase tracking-widest text-lumiere-ink/50 hover:text-lumiere-ink">
+            <Activity size={14} /> Agent Trace {trace ? "▲" : "▼"}
+          </button>
+          {trace && (
+            <div className="mt-3 overflow-x-auto rounded-xl border border-black/10" data-testid="agent-trace">
+              <table className="w-full text-xs">
+                <thead><tr className="font-mono text-[0.55rem] uppercase tracking-widest text-lumiere-ink/40 border-b border-black/10">
+                  <th className="text-left p-2">Time</th><th className="text-left p-2">Agent</th><th className="text-left p-2">Operation</th><th className="text-left p-2">ms</th><th className="text-left p-2">Status</th><th className="text-left p-2">Conf</th></tr></thead>
+                <tbody>
+                  {trace.map((r, i) => (
+                    <tr key={i} className="border-b border-black/5">
+                      <td className="p-2 font-mono text-lumiere-ink/40">{(r.timestamp || "").slice(11, 19)}</td>
+                      <td className="p-2">{r.agent}</td><td className="p-2 font-mono">{r.operation}</td>
+                      <td className="p-2 font-mono">{r.duration_ms}</td>
+                      <td className="p-2 font-mono">{r.status}</td><td className="p-2 font-mono">{r.confidence?.toFixed?.(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </main>
     </div>
   );
 }
 
-export default function Experience() {
-  const { id } = useParams();
-  const { t, lang } = useI18n();
-  const [exp, setExp] = useState(null);
-  const [tab, setTab] = useState("story");
-  const [runs, setRuns] = useState([]);
-  const [agentHealth, setAgentHealth] = useState(null);
-  const [partnerHealth, setPartnerHealth] = useState(null);
-  const [intent, setIntent] = useState("");
-  const [planning, setPlanning] = useState(false);
-  const [evaluating, setEvaluating] = useState(false);
-  const [cutting, setCutting] = useState(false);
-  const [revising, setRevising] = useState(false);
-  const [instruction, setInstruction] = useState("");
-  const [selectedMusic, setSelectedMusic] = useState(null);
-  const pollRef = useRef(null);
-
-  const fetchExp = useCallback(async () => {
-    try {
-      const res = await api.get(`/experiences/${id}`);
-      setExp(res.data);
-      return res.data;
-    } catch { toast.error("Load failed"); }
-  }, [id]);
-
-  const fetchRuns = useCallback(async () => {
-    try { const res = await api.get(`/experiences/${id}/agent-runs`); setRuns(res.data); } catch { /* */ }
-  }, [id]);
-
-  useEffect(() => {
-    fetchExp();
-    fetchRuns();
-    api.get("/agent/health").then((r) => setAgentHealth(r.data)).catch(() => {});
-    api.get("/partner/health").then((r) => setPartnerHealth(r.data)).catch(() => {});
-  }, [fetchExp, fetchRuns]);
-
-  // polling while work is pending
-  const pending = exp && (
-    (exp.media || []).some((m) => ["processing", "analyzing"].includes(m.status)) ||
-    (exp.cuts || []).some((c) => c.status === "rendering")
-  );
-  useEffect(() => {
-    if (pending && !pollRef.current) {
-      pollRef.current = setInterval(() => { fetchExp(); fetchRuns(); }, 3500);
-    } else if (!pending && pollRef.current) {
-      clearInterval(pollRef.current); pollRef.current = null;
-    }
-    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
-  }, [pending, fetchExp, fetchRuns]);
-
-  const doPlan = async () => {
-    if (!intent.trim()) return;
-    setPlanning(true);
-    try {
-      await api.post(`/experiences/${id}/plan`, { intent: intent.trim() });
-      await fetchExp(); await fetchRuns();
-      toast.success("Story directed");
-    } catch { toast.error("Planning failed"); }
-    finally { setPlanning(false); }
-  };
-
-  const doEvaluate = async () => {
-    setEvaluating(true);
-    try {
-      await api.post(`/experiences/${id}/evaluate`);
-      await fetchExp(); await fetchRuns();
-      toast.success("Coverage evaluated");
-    } catch (e) { toast.error(errMsg(e, "Evaluation failed")); }
-    finally { setEvaluating(false); }
-  };
-
-  const doCut = async () => {
-    setCutting(true);
-    try {
-      await api.post(`/experiences/${id}/cut`, { music_id: selectedMusic });
-      await fetchExp(); await fetchRuns();
-      toast.success("Rendering cut");
-    } catch (e) { toast.error(errMsg(e, "Cut failed")); }
-    finally { setCutting(false); }
-  };
-
-  const doRevise = async (cutId, confirm = false) => {
-    if (!instruction.trim()) return;
-    setRevising(true);
-    try {
-      await api.post(`/cuts/${cutId}/revise`, { instruction: instruction.trim(), music_id: selectedMusic });
-      setInstruction("");
-      await fetchExp(); await fetchRuns();
-      toast.success("Re-editing");
-    } catch { toast.error("Revise failed"); }
-    finally { setRevising(false); }
-  };
-
-  const removeClip = async (cutId, assetId) => {
-    try {
-      await api.post(`/cuts/${cutId}/remove-clip`, { asset_id: assetId });
-      await fetchExp(); await fetchRuns();
-      toast.success(lang === "es" ? "Clip quitado — nueva versión" : "Clip removed — new version");
-    } catch (e) { toast.error(errMsg(e, "Failed")); }
-  };
-
-  const deleteCut = async (cutId) => {
-    try {
-      await api.delete(`/cuts/${cutId}`);
-      await fetchExp();
-      toast.success(lang === "es" ? "Corte borrado (originales intactos)" : "Cut deleted (originals kept)");
-    } catch (e) { toast.error(errMsg(e, "Failed")); }
-  };
-
-  const clipName = (assetId) => {
-    const m = (exp.media || []).find((x) => x.id === assetId);
-    return m?.original_filename || assetId?.slice(0, 8);
-  };
-  const [cutEditing, setCutEditing] = useState(null);
-
-  if (!exp) {
-    return (
-      <div className="min-h-screen bg-lumiere-base theme-dark">
-        <Header dark back />
-        <div className="flex items-center justify-center py-32"><span className="font-mono text-sm text-lumiere-orange cursor-blink">LOADING</span></div>
-      </div>
-    );
-  }
-
-  const plan = exp.plan;
-  const missions = (exp.missions || {}).missions || [];
-  const media = exp.media || [];
-  const analyzedCount = media.filter((m) => m.status === "analyzed").length;
-  const usableCount = media.filter((m) => (m.analysis?.technical?.usable)).length;
-  const completeness = exp.completeness;
-  const cuts = exp.cuts || [];
-  const latestReadyCut = [...cuts].reverse().find((c) => c.status === "ready");
-
+function Bar({ label, v = 0 }) {
+  const pct = Math.round((v || 0) * 100);
   return (
-    <div className="min-h-screen bg-lumiere-base text-lumiere-ivory theme-dark pb-24 sm:pb-8">
-      <Header dark back />
+    <div>
+      <div className="flex justify-between mb-1"><span className="text-sm text-lumiere-ink/70">{label}</span><span className="font-mono text-xs text-lumiere-ink/50">{pct}%</span></div>
+      <div className="h-1.5 bg-black/10 rounded-full overflow-hidden"><div className="h-full bg-lumiere-iris rounded-full" style={{ width: `${pct}%`, transition: "width 0.8s ease" }} /></div>
+    </div>
+  );
+}
 
-      {/* title band */}
-      <div className="px-4 sm:px-8 pt-6 pb-4 max-w-6xl mx-auto">
-        <p className="label-mono mb-1 text-lumiere-orange">{exp.type} · {t("private")}</p>
-        <h1 className="font-display text-3xl sm:text-4xl font-black tracking-tight text-white">{exp.title}</h1>
+function LiveDirector({ id, beats, onAction, reload }) {
+  const [data, setData] = useState(null);
+  const load = useCallback(async () => { try { const r = await api.get(`/v2/experiences/${id}/next-shot`); setData(r.data); } catch { /* */ } }, [id]);
+  useEffect(() => { load(); }, [load]);
+  const m = data?.mission;
+  const act = async (status, reason) => { await onAction(m.shot_id, status, reason); await load(); await reload(); };
+  if (!data) return <div className="py-16 text-center"><Loader2 className="animate-spin text-lumiere-iris mx-auto" /></div>;
+  if (!m) return (
+    <div data-testid="phase-during-content" className="rounded-2xl border border-black/10 bg-lumiere-warm p-10 text-center">
+      <Check size={32} className="mx-auto text-lumiere-sage mb-3" />
+      <h2 className="font-display text-2xl">All missions handled.</h2>
+      <p className="text-lumiere-ink/55 mt-1">Head to After to upload and build your film.</p>
+    </div>
+  );
+  const p = data.progress || {};
+  return (
+    <div data-testid="phase-during-content" className="max-w-2xl mx-auto">
+      <div className="rounded-2xl overflow-hidden border border-black/10 bg-gradient-to-br from-lumiere-iris/15 to-lumiere-gold/10 p-8" data-testid="live-director">
+        <div className="flex items-center gap-2 text-lumiere-iris mb-4">
+          <Clock size={14} /><span className="font-mono text-[0.6rem] uppercase tracking-widest">{m.ideal_time_label ? `Golden hour · ${m.ideal_time_label}` : m.ideal_time_window} · why now: best light</span>
+        </div>
+        <span className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/50">{g(m.shot_type)} · {g(m.movement)}{m.is_gap_mission ? " · GAP" : ""}</span>
+        <h2 className="font-display text-3xl mt-2 leading-tight" data-testid="live-mission-action">{g(m.action)}</h2>
+        <p className="text-lumiere-ink/60 mt-3">{g(m.narrative_purpose)}</p>
+        <p className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/40 mt-3">~{m.duration_seconds}s</p>
+        <div className="flex flex-wrap gap-2 mt-6">
+          <button data-testid="mission-gotit" onClick={() => act("captured")} className="inline-flex items-center gap-2 bg-lumiere-ink text-lumiere-ivory hover:bg-lumiere-ink/85 px-5 py-2.5 rounded-full font-mono text-xs uppercase tracking-widest"><Check size={14} /> I got it</button>
+          <button data-testid="mission-skip" onClick={() => act("skipped", "not_possible")} className="inline-flex items-center gap-2 border border-black/15 text-lumiere-ink/60 hover:text-lumiere-ink px-5 py-2.5 rounded-full font-mono text-xs uppercase tracking-widest"><SkipForward size={14} /> Skip</button>
+          <button data-testid="mission-notnow" onClick={() => act("pending", "not_now")} className="inline-flex items-center gap-2 border border-black/15 text-lumiere-ink/60 hover:text-lumiere-ink px-5 py-2.5 rounded-full font-mono text-xs uppercase tracking-widest"><ChevronRight size={14} /> Not now</button>
+        </div>
       </div>
-
-      {/* tabs (top on desktop) */}
-      <div className="hidden sm:flex sticky top-[65px] z-30 px-8 max-w-6xl mx-auto gap-1 border-b border-white/10 bg-lumiere-base/80 backdrop-blur-xl">
-        {TABS.map((tb) => (
-          <button key={tb.id} data-testid={`tab-${tb.id}`} onClick={() => setTab(tb.id)}
-            className={`flex items-center gap-2 px-4 py-3 font-mono text-xs uppercase tracking-widest border-b-2 -mb-px transition-colors duration-300 ${tab === tb.id ? "border-lumiere-orange text-white" : "border-transparent text-zinc-500 hover:text-white"}`}>
-            <tb.icon size={14} /> {t(tb.id)}
-          </button>
-        ))}
+      <div className="mt-4 flex items-center justify-between font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-ink/50" data-testid="production-progress">
+        <span>{p.captured || 0} of {p.total || 0} shots · {p.critical_covered || 0} of {p.critical_total || 0} critical beats covered</span>
+        <span>{data.remaining} pending</span>
       </div>
-
-      <main className="px-4 sm:px-8 py-6 max-w-6xl mx-auto">
-        <OrchestratorPanel expId={id} lang={lang} onGoTab={setTab}
-          refreshKey={`${media.length}-${cuts.length}-${exp.stage}-${media.filter((m) => m.status === "trashed").length}-${exp.completeness ? 1 : 0}`} />
-        <AnimatePresence mode="wait">
-          <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}>
-
-            {/* STORY */}
-            {tab === "story" && (
-              <div className="space-y-8">
-                {!plan ? (
-                  <div className="max-w-2xl">
-                    <p className="label-mono mb-2">{t("storyIntent")}</p>
-                    <h2 className="font-display text-2xl sm:text-3xl text-white mb-6">{t("intentPrompt")}</h2>
-                    <textarea data-testid="intent-textarea" value={intent} onChange={(e) => setIntent(e.target.value)}
-                      rows={5} placeholder={t("intentPlaceholder")}
-                      className="w-full bg-lumiere-surface border border-white/15 focus:border-lumiere-orange outline-none p-4 text-white resize-none transition-colors duration-300" />
-                    <button data-testid="direct-story-button" onClick={doPlan} disabled={planning || !intent.trim()}
-                      className="mt-4 inline-flex items-center gap-2 bg-lumiere-orange hover:bg-lumiere-orangeHover disabled:opacity-50 text-white px-6 py-3 font-mono text-xs uppercase tracking-widest transition-colors duration-300">
-                      {planning ? <><Loader2 size={14} className="animate-spin" /> {t("directing")}</> : <><Sparkles size={14} /> {t("directMyStory")}</>}
-                    </button>
-                    {planning && <p className="mt-3 font-mono text-xs text-zinc-500 cursor-blink">DIRECTOR + CINEMATOGRAPHER</p>}
-                  </div>
-                ) : (
-                  <>
-                    <div className="viewfinder border border-white/10 bg-lumiere-surface p-6 sm:p-8">
-                      <span className="vf-bl" /><span className="vf-br" />
-                      <p className="label-mono mb-3">{t("story")}</p>
-                      <h2 data-testid="plan-title" className="font-display text-3xl sm:text-4xl font-bold text-white mb-4">{bl(plan.title, lang)}</h2>
-                      <p className="text-zinc-300 leading-relaxed max-w-2xl">{bl(plan.premise, lang)}</p>
-                      <div className="grid sm:grid-cols-2 gap-6 mt-6">
-                        <div><p className="label-mono mb-1">{t("arc")}</p><p className="text-sm text-zinc-400">{bl(plan.arc, lang)}</p></div>
-                        <div><p className="label-mono mb-1">{t("tone")}</p><p className="text-sm text-zinc-400">{bl(plan.tone, lang)}</p></div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="label-mono mb-3">{t("beats")}</p>
-                      <div className="space-y-2">
-                        {(plan.beats || []).map((b) => (
-                          <div key={b.id} data-testid={`beat-${b.id}`} className="border-l-2 border-lumiere-orange bg-lumiere-surface p-4">
-                            <div className="flex items-center gap-3">
-                              <span className="font-mono text-xs text-lumiere-orange">{String(b.order).padStart(2, "0")}</span>
-                              <span className="font-display text-lg text-white">{bl(b.name, lang)}</span>
-                            </div>
-                            <p className="text-sm text-zinc-400 mt-1 ml-8">{bl(b.purpose, lang)}</p>
-                            <p className="text-xs text-lumiere-cyan mt-1 ml-8 font-mono">{bl(b.emotion, lang)}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <p className="label-mono">{t("shotMissions")}</p>
-                        <button data-testid="goto-capture" onClick={() => setTab("capture")} className="font-mono text-xs text-lumiere-orange hover:underline">{t("capture")} →</button>
-                      </div>
-                      <div className="grid sm:grid-cols-2 gap-3">
-                        {[...missions].sort((a, b) => (a.priority || 5) - (b.priority || 5)).map((m) => (
-                          <div key={m.id} data-testid={`mission-${m.id}`} className="border border-white/10 bg-lumiere-surface p-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-cyan">{m.shot_type}</span>
-                              <span className="font-mono text-[0.6rem] text-zinc-500">{t("priority")} {m.priority}</span>
-                            </div>
-                            <p className="font-display text-lg text-white">{bl(m.title, lang)}</p>
-                            <p className="text-sm text-zinc-400 mt-1">{bl(m.direction, lang)}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* CAPTURE */}
-            {tab === "capture" && (
-              <div className="space-y-8">
-                {!plan ? (
-                  <p className="text-zinc-500">{t("noFootage")}</p>
-                ) : (
-                  <>
-                    <div>
-                      <p className="label-mono mb-3">{t("liveDirection")}</p>
-                      <div className="space-y-3">
-                        {[...missions].sort((a, b) => (a.priority || 5) - (b.priority || 5)).map((m, idx) => {
-                          const shot = media.filter((x) => x.mission_id === m.id);
-                          const isNext = idx === 0 && shot.length === 0;
-                          return (
-                            <div key={m.id} data-testid={`capture-mission-${m.id}`}
-                              className={`border p-4 ${isNext ? "border-lumiere-orange bg-lumiere-orange/5" : "border-white/10 bg-lumiere-surface"}`}>
-                              <div className="flex flex-wrap items-center justify-between gap-3">
-                                <div>
-                                  <div className="flex items-center gap-2">
-                                    {isNext && <span className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-orange">{t("nextMission")}</span>}
-                                    <span className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-cyan">{m.shot_type}</span>
-                                  </div>
-                                  <p className="font-display text-lg text-white mt-1">{bl(m.title, lang)}</p>
-                                  <p className="text-sm text-zinc-400">{bl(m.direction, lang)}</p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  {shot.map((s) => <StatusBadge key={s.id} status={s.status} />)}
-                                  <UploadButton expId={id} missionId={m.id} label={t("uploadFootage")} testid={`upload-${m.id}`}
-                                    variant={isNext ? "primary" : "ghost"} onStart={fetchExp} />
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="label-mono mb-3">{t("capturedFootage")} · {media.length}</p>
-                      {media.length === 0 ? (
-                        <p className="text-zinc-500">{t("noFootage")}</p>
-                      ) : (
-                        <div className="grid sm:grid-cols-2 gap-3">
-                          {media.map((a) => (
-                            <div key={a.id} data-testid={`asset-${a.id}`} className="border border-white/10 bg-lumiere-surface p-4">
-                              <div className="flex items-center justify-between">
-                                <span className="font-mono text-xs text-zinc-400 truncate max-w-[60%]">{a.original_filename}</span>
-                                <StatusBadge status={a.status} />
-                              </div>
-                              <ProcessTimeline status={a.status} />
-                              {a.status === "analyzed" && a.analysis && (
-                                <div className="mt-3 space-y-2">
-                                  <p className="text-sm text-zinc-300">{bl(a.analysis.scene, lang)}</p>
-                                  <div className="flex flex-wrap gap-2">
-                                    <span className={`font-mono text-[0.6rem] px-2 py-0.5 border ${a.analysis.technical?.usable ? "border-emerald-500/40 text-emerald-400" : "border-red-500/40 text-red-400"}`}>
-                                      {a.analysis.technical?.usable ? t("usable") : t("notUsable")}
-                                    </span>
-                                    <span className="font-mono text-[0.6rem] px-2 py-0.5 border border-lumiere-cyan/40 text-lumiere-cyan">
-                                      {t("relevance")} {Math.round((a.analysis.narrative_relevance?.score || 0) * 100)}%
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
-                              {a.status === "failed" && <p className="text-xs text-red-400 mt-2">{t("failed")}</p>}
-                              <div className="mt-3 pt-3 border-t border-white/10 flex justify-end">
-                                <MediaActions asset={a} lang={lang} onDone={fetchExp} />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    {analyzedCount > 0 && (
-                      <button data-testid="goto-evaluate" onClick={() => setTab("evaluate")}
-                        className="font-mono text-xs text-lumiere-orange hover:underline">{t("evaluate")} →</button>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* EVALUATE */}
-            {tab === "evaluate" && (
-              <div className="space-y-8">
-                {analyzedCount === 0 ? (
-                  <p className="text-zinc-500">{t("noEval")}</p>
-                ) : (
-                  <>
-                    <button data-testid="evaluate-button" onClick={doEvaluate} disabled={evaluating}
-                      className="inline-flex items-center gap-2 border border-lumiere-cyan/50 text-lumiere-cyan hover:bg-lumiere-cyan/10 px-5 py-3 font-mono text-xs uppercase tracking-widest transition-colors duration-300 disabled:opacity-50">
-                      {evaluating ? <><Loader2 size={14} className="animate-spin" /> {t("evaluating")}</> : <><Gauge size={14} /> {t("runEvaluation")}</>}
-                    </button>
-
-                    {completeness?.completeness && (
-                      <div className="grid lg:grid-cols-3 gap-6 items-center">
-                        <div className="viewfinder border border-white/10 bg-lumiere-surface p-8 flex justify-center">
-                          <span className="vf-bl" /><span className="vf-br" />
-                          <CircularScore value={completeness.completeness.overall} label={t("overall")} testid="overall-score" />
-                        </div>
-                        <div className="lg:col-span-2 border border-white/10 bg-lumiere-surface p-6 space-y-4">
-                          <ScoreBar label={t("narrative")} value={completeness.completeness.narrative} />
-                          <ScoreBar label={t("visual")} value={completeness.completeness.visual} />
-                          <ScoreBar label={t("emotional")} value={completeness.completeness.emotional} />
-                          {completeness.recommendation && (
-                            <div className="pt-3 border-t border-white/10">
-                              <p className="label-mono mb-1">{t("recommendation")}</p>
-                              <p className="text-sm text-zinc-300">{bl(completeness.recommendation, lang)}</p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {completeness?.gaps?.length > 0 && (
-                      <div>
-                        <p className="label-mono mb-3">{t("gaps")}</p>
-                        <div className="space-y-2">
-                          {completeness.gaps.map((g, i) => (
-                            <div key={i} className="flex items-start gap-3 border border-white/10 bg-lumiere-surface p-3">
-                              <AlertTriangle size={15} className={g.severity === "critical" ? "text-red-400 mt-0.5" : "text-amber-400 mt-0.5"} />
-                              <div>
-                                <span className={`font-mono text-[0.6rem] uppercase tracking-widest ${g.severity === "critical" ? "text-red-400" : "text-amber-400"}`}>{t(g.severity)}</span>
-                                <p className="text-sm text-zinc-300">{bl(g.reason, lang)}</p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {completeness?.get_the_shot?.length > 0 && (
-                      <div>
-                        <p className="label-mono mb-3 text-lumiere-orange">{t("getTheShot")}</p>
-                        <div className="grid sm:grid-cols-2 gap-3">
-                          {completeness.get_the_shot.map((s) => (
-                            <div key={s.id} data-testid={`gts-${s.id}`}
-                              className="relative overflow-hidden border border-lumiere-orange/40 p-5">
-                              <div className="absolute inset-0 opacity-20 bg-cover bg-center blur-sm"
-                                style={{ backgroundImage: "url('https://images.unsplash.com/photo-1601042879364-f3947d3f9c16?crop=entropy&cs=srgb&fm=jpg&q=85&w=800')" }} />
-                              <div className="relative">
-                                <span className="font-mono text-[0.6rem] uppercase tracking-widest text-lumiere-cyan">{s.shot_type}</span>
-                                <p className="font-display text-xl text-white mt-1">{bl(s.title, lang)}</p>
-                                <p className="text-sm text-zinc-300 mt-1">{bl(s.direction, lang)}</p>
-                                <p className="text-xs text-zinc-400 mt-2 italic">{bl(s.why, lang)}</p>
-                                <div className="mt-4">
-                                  <UploadButton expId={id} missionId={s.id} label={t("captureThis")} testid={`gts-upload-${s.id}`} variant="primary" onStart={fetchExp} />
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {completeness && (
-                      <button data-testid="goto-edit" onClick={() => setTab("edit")} className="font-mono text-xs text-lumiere-orange hover:underline">{t("edit")} →</button>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* EDIT */}
-            {tab === "edit" && (
-              <div className="space-y-8">
-                <div className="border border-white/10 bg-lumiere-surface p-5">
-                  <MusicPicker selected={selectedMusic} onSelect={setSelectedMusic} />
-                </div>
-                <div className="flex flex-wrap items-center gap-4">
-                  <button data-testid="render-cut-button" onClick={doCut} disabled={cutting || usableCount === 0}
-                    className="inline-flex items-center gap-2 bg-lumiere-orange hover:bg-lumiere-orangeHover disabled:opacity-40 text-white px-6 py-3 font-mono text-xs uppercase tracking-widest transition-colors duration-300">
-                    {cutting ? <><Loader2 size={14} className="animate-spin" /> {t("rendering")}</> : <><Film size={14} /> {cuts.length === 0 ? t("firstCut") : t("firstCut")}</>}
-                  </button>
-                  {usableCount === 0 && <span className="font-mono text-xs text-zinc-500">{t("noCut")}</span>}
-                </div>
-
-                {latestReadyCut && (
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <p className="label-mono text-lumiere-orange">{t("finalFilm")} · {t("version")} {latestReadyCut.version}</p>
-                      <span className="font-mono text-xs text-zinc-500">{t("duration")}: {Math.round(latestReadyCut.duration_sec || 0)}{t("seconds")} · {latestReadyCut.clip_count} {t("clips")}</span>
-                    </div>
-                    <VideoMonitor storagePath={latestReadyCut.storage_path} testid="cut-player" />
-                  </div>
-                )}
-
-                {/* re-edit */}
-                {latestReadyCut && (
-                  <div className="border border-white/10 bg-lumiere-surface p-5">
-                    <p className="label-mono mb-3 flex items-center gap-2"><Wand2 size={13} /> {t("reEdit")}</p>
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <input data-testid="revise-input" value={instruction} onChange={(e) => setInstruction(e.target.value)}
-                        placeholder={t("reEditPlaceholder")}
-                        className="flex-1 bg-black/40 border border-white/15 focus:border-lumiere-orange outline-none px-4 py-3 text-white transition-colors duration-300" />
-                      <button data-testid="apply-edit-button" onClick={() => doRevise(latestReadyCut.id)} disabled={revising || !instruction.trim()}
-                        className="inline-flex items-center gap-2 bg-lumiere-orange hover:bg-lumiere-orangeHover disabled:opacity-50 text-white px-5 py-3 font-mono text-xs uppercase tracking-widest transition-colors duration-300">
-                        {revising ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />} {t("applyEdit")}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* version history */}
-                {cuts.length > 0 && (
-                  <div>
-                    <p className="label-mono mb-3">{t("version")} · {cuts.length}</p>
-                    <div className="space-y-2">
-                      {[...cuts].reverse().map((c) => (
-                        <div key={c.id} data-testid={`cut-${c.version}`} className="border border-white/10 bg-lumiere-surface p-4">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <span className="font-mono text-lumiere-orange">V{c.version}</span>
-                              <span className="font-mono text-xs text-zinc-400 uppercase">{c.kind === "revision" ? t("revision") : t("initial")}</span>
-                            </div>
-                            <StatusBadge status={c.status} />
-                          </div>
-                          {c.instruction && <p className="text-sm text-zinc-300 mt-2 screenplay"><span className="name text-lumiere-orange">YOU</span> — “{c.instruction}”</p>}
-                          {c.reviser_summary && <p className="text-sm text-zinc-400 mt-1 screenplay"><span className="name text-lumiere-cyan">REVISER</span> — {bl(c.reviser_summary, lang)}</p>}
-                          {c.requires_confirmation && <p className="text-xs text-amber-400 mt-1 flex items-center gap-1"><AlertTriangle size={12} /> {t("needsConfirm")}</p>}
-                          {c.impacted && (
-                            <p className="text-xs text-amber-400 mt-2 flex items-center gap-1" data-testid={`cut-impacted-${c.version}`}>
-                              <AlertTriangle size={12} /> {bl(c.impact_reason, lang) || (lang === "es" ? "Corte afectado por un clip borrado" : "Cut impacted by a deleted clip")}
-                            </p>
-                          )}
-                          {c.edit_decisions?.length > 0 && (
-                            <p className="text-xs text-zinc-500 mt-2 font-mono">{t("editDecisions")}: {c.edit_decisions.map((d) => d.type).join(", ")}</p>
-                          )}
-                          {(c.edl || []).length > 0 && (
-                            <div className="mt-3">
-                              <p className="font-mono text-[0.6rem] uppercase tracking-widest text-zinc-500 mb-1.5">
-                                {lang === "es" ? "Clips del corte" : "Clips in cut"}
-                              </p>
-                              <div className="flex flex-wrap gap-2" data-testid={`cut-clips-${c.version}`}>
-                                {[...new Set((c.edl || []).map((cl) => cl.asset_id))].map((aid) => {
-                                  const distinct = new Set((c.edl || []).map((cl) => cl.asset_id)).size;
-                                  return (
-                                    <span key={aid} className="inline-flex items-center gap-1.5 border border-white/15 px-2 py-1 font-mono text-[0.6rem] text-zinc-300">
-                                      {clipName(aid)}
-                                      {distinct > 1 && (
-                                        <button data-testid={`remove-clip-${c.version}-${aid}`} onClick={() => removeClip(c.id, aid)}
-                                          title={lang === "es" ? "Quitar clip (nueva versión)" : "Remove clip (new version)"}
-                                          className="text-zinc-500 hover:text-red-400 transition-colors"><X size={11} /></button>
-                                      )}
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-4 mt-3">
-                            {c.status === "ready" && (
-                              <button data-testid={`play-cut-${c.version}`} onClick={() => { setTab("edit"); }}
-                                className="inline-flex items-center gap-1.5 font-mono text-xs text-lumiere-orange hover:underline"><Play size={12} /> {t("finalFilm")}</button>
-                            )}
-                            {c.status === "ready" && (
-                              <button data-testid={`pro-edit-cut-${c.version}`} onClick={() => setCutEditing(c)}
-                                className="inline-flex items-center gap-1.5 bg-lumiere-iris hover:bg-lumiere-irisHover text-white px-3 py-1.5 font-mono text-[0.6rem] uppercase tracking-widest transition-colors">
-                                <Wand2 size={12} /> {lang === "es" ? "Editar Pro" : "Pro Edit"}
-                              </button>
-                            )}
-                            <button data-testid={`delete-cut-${c.version}`} onClick={() => deleteCut(c.id)}
-                              className="inline-flex items-center gap-1.5 font-mono text-[0.6rem] uppercase tracking-widest text-zinc-500 hover:text-red-400 transition-colors">
-                              <Trash2 size={11} /> {lang === "es" ? "Borrar corte" : "Delete cut"}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* TRACE */}
-            {tab === "trace" && (
-              <AgentTrace runs={runs} agentHealth={agentHealth} partnerHealth={partnerHealth} />
-            )}
-
-          </motion.div>
-        </AnimatePresence>
-      </main>
-
-      {/* mobile bottom nav */}
-      <nav className="sm:hidden fixed bottom-0 inset-x-0 z-40 grid grid-cols-5 bg-lumiere-surface/95 backdrop-blur-xl border-t border-white/10">
-        {TABS.map((tb) => (
-          <button key={tb.id} data-testid={`mtab-${tb.id}`} onClick={() => setTab(tb.id)}
-            className={`flex flex-col items-center gap-1 py-3 transition-colors duration-300 ${tab === tb.id ? "text-lumiere-orange" : "text-zinc-500"}`}>
-            <tb.icon size={18} />
-            <span className="font-mono text-[0.55rem] uppercase tracking-wider">{t(tb.id)}</span>
-          </button>
-        ))}
-      </nav>
-      {cutEditing && (
-        <CutEditor cut={cutEditing} lang={lang}
-          onClose={() => setCutEditing(null)}
-          onDone={() => { fetchExp(); fetchRuns(); }} />
-      )}
     </div>
   );
 }

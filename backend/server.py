@@ -30,6 +30,7 @@ from auth import exchange_session, get_current_user, logout as do_logout
 from admin import admin_router
 from payments import payments_router
 from inserts_router import inserts_router
+from v2 import v2_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("lumiere")
@@ -1168,6 +1169,7 @@ app.include_router(api)
 app.include_router(admin_router)
 app.include_router(payments_router)
 app.include_router(inserts_router)
+app.include_router(v2_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

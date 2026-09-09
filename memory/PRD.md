@@ -305,3 +305,16 @@ LUMIÈRE is the only system that accompanies all 3 phases of a real story: BEFOR
 - P1 **Block 5**: Agent Trace SCR-095 (timestamp·agent·operation·duration_ms·status·confidence).
 - P1 **Block 10**: DEMO_MODE (preloaded /demo_assets, fallback_cut.mp4, cached agent responses, one-click reset).
 - Geocoding: Nominatim (UA LumiereStudio/1.0, 1 req/s, 400ms debounce, in-mem cache; fallback free-text + null latlng → generic golden-hour labels).
+
+### Blocks 2 (core) + 3 + 4 + 5 — ✅ DONE (2026-09-09, tested iteration_19 = 100%, 12/12 frontend flows)
+Backend curl-verified + frontend testing-agent-verified end to end.
+- backend/v2.py (router /api/v2): intent, story (Director, exact prompt, 5-7 beats, exactly 3 critical enforced in code, deterministic fallback), shots (Cinematographer, 8-12 missions) + Golden Hour ideal_time_computed, state, upload (provenance=human_captured), analyze (Vision segments), completeness+gaps (deterministic formula in completeness.py), gaps/{id}/mission (GET THE SHOT → phase REGRESSES to during), next-shot (deterministic selection) + shots/{id}/status (skip critical → alternative mission), build (Editor EDL, ai_previz filtered, FFmpeg render + CC0 music), cuts/{id}/revise (NL→structured params→deterministic new CHILD CutVersion, v1 preserved), trace.
+- backend/v2agents.py: exact v2 prompts via Emergent Universal Key (emergentintegrations) — BYPASSES the Agent Engine gateway (whose deployed subagents used a legacy bilingual schema). All fields normalized to plain English.
+- backend/sun_time.py (astral) golden hour + window enum normalization. backend/completeness.py deterministic score/gaps.
+- Frontend: pages/Experience.jsx rebuilt as the 3-phase workspace (tabs before/during/after), components/PhaseIndicator.jsx (regresses on GET THE SHOT), Live Director (one mission), completeness ring + gaps + Missing Shot, build + video players, conversational revise with version lineage, Agent Trace table. pages/Create.jsx, Experiences.jsx.
+- Verified numbers: story 5 beats/3 critical; build 45.6s cinematic; revise "faster,less of me" → 28.2s child; MP4 served at /api/files (206/200).
+
+### REMAINING (v2 P1/P2)
+- Block 2.8: Veo previz (degrade to Gemini reference image, badge AI REFERENCE, provenance ai_previz never in EDL) — endpoint scaffold pending.
+- Block 2 polish: SCR-020 location autocomplete via Nominatim (UA LumiereStudio/1.0, 1 req/s, 400ms debounce, cache; fallback free-text null latlng). Currently Create takes title/type only; location can be set via API.
+- Block 10: DEMO_MODE (preloaded /demo_assets, fallback_cut.mp4, cached agent responses, one-click reset).
