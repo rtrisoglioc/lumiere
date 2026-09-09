@@ -443,6 +443,11 @@ async def _recompute(exp_id, story_id):
         saved_gaps.append(g)
     await db.experiences.update_one({"id": exp_id}, {"$set": {"completeness": result}})
     await db.story_plans.update_one({"story_id": story_id}, {"$set": {"completeness_score": result["score"]}})
+    try:
+        from services import grafana_metrics
+        grafana_metrics.record_completeness(exp_id, result.get("score"))
+    except Exception:
+        pass
     return result, saved_gaps
 
 

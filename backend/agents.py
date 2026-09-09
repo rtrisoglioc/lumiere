@@ -48,6 +48,13 @@ async def _persist_run(experience_id, agent, meta, input_summary, output, tools,
         run.update(extra)
     await db.agent_runs.insert_one(dict(run))
     run.pop("_id", None)
+    # Grafana Cloud partner track — fire-and-forget, fails silently, never blocks.
+    try:
+        from services import grafana_metrics
+        grafana_metrics.record_agent(agent=agent, status=meta.get("status", "ok"),
+                                     latency_ms=meta.get("latency_ms"), confidence=meta.get("confidence"))
+    except Exception:
+        pass
     return run
 
 
