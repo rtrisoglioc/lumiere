@@ -288,3 +288,16 @@ async def story_ideas(exp):
               f"Target: {exp.get('target_platform')}. Propose 3 ideas.")
     out, meta = await _run_and_trace(exp["id"], "Director Agent", "suggest_ideas", IDEAS_SYS, prompt, model=PROXY_FAST)
     return out, meta
+
+
+TRANSLATE_SYS = """You are a professional translator. Translate ONLY the human-readable text
+fields (title, premise, label, purpose) into the target language. Keep beat_id values
+EXACTLY unchanged. Preserve tone. Return ONLY the same JSON structure you received."""
+
+
+async def translate_story(exp_id, payload, to):
+    import json as _json
+    target = "Spanish" if to == "es" else "English"
+    prompt = f"Target language: {target}. Translate the text fields in this JSON:\n{_json.dumps(payload)}"
+    out, meta = await _run_and_trace(exp_id, "Translator", "translate_story", TRANSLATE_SYS, prompt, model=PROXY_FAST)
+    return out, meta

@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   Loader2, Upload, Sparkles, Film, Wand2, ArrowRight, Check, SkipForward,
-  Clock, MapPin, AlertTriangle, Camera, RefreshCw, ChevronRight, Activity, Share2, Copy, Trash2,
+  Clock, MapPin, AlertTriangle, Camera, RefreshCw, ChevronRight, Activity, Share2, Copy, Trash2, Pencil, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, API, getToken } from "@/lib/api";
@@ -84,6 +84,13 @@ export default function Experience() {
   const suggestIdeas = async () => { setBusy("ideas"); try { const r = await api.post(`/v2/experiences/${id}/story-ideas`); setIdeas(r.data.ideas || []); if (!r.data.ideas?.length) toast.info("No ideas — try again"); } catch { toast.error("Couldn't fetch ideas"); } finally { setBusy(""); } };
   const applyIdea = (idea) => { setFeelings((idea.feeling_tags || []).slice(0, 3)); setFreeText(idea.free_text || ""); toast.success("Idea applied — tweak or create"); };
   const deleteShot = async (shotId) => { try { await api.delete(`/v2/shots/${shotId}`); await load(); toast.success("Shot removed"); } catch { toast.error("Couldn't remove shot"); } };
+
+  const [editingBeat, setEditingBeat] = useState(null);
+  const [beatDraft, setBeatDraft] = useState({ label: "", purpose: "" });
+  const startEditBeat = (b) => { setEditingBeat(b.beat_id); setBeatDraft({ label: g(b.label), purpose: g(b.purpose) }); };
+  const saveBeat = async () => { try { await api.patch(`/v2/beats/${editingBeat}`, beatDraft); setEditingBeat(null); await load(); toast.success(s("Saved", "Guardado")); } catch { toast.error(s("Save failed", "No se pudo guardar")); } };
+  const deleteBeat = async (bid) => { try { await api.delete(`/v2/beats/${bid}`); await load(); toast.success(s("Beat removed", "Beat eliminado")); } catch { toast.error("Error"); } };
+  const translateStory = async (to) => { setBusy("translate"); try { await api.post(`/v2/experiences/${id}/translate?to=${to}`); await load(); toast.success(s("Translated", "Traducido")); } catch { toast.error(s("Translation failed", "Falló la traducción")); } finally { setBusy(""); } };
 
   const upload = async (files) => {
     if (!files?.length) return;
@@ -206,17 +213,42 @@ export default function Experience() {
             ) : (
               <>
                 <div>
-                  <p className="font-mono text-xs uppercase tracking-widest text-lumiere-ink/50 mb-3">{s("Story arc", "Arco narrativo")} · {beats.length} {s("beats", "beats")}</p>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="font-mono text-xs uppercase tracking-widest text-lumiere-ink/50">{s("Story arc", "Arco narrativo")} · {beats.length} {s("beats", "beats")}</p>
+                    <button data-testid="translate-story" onClick={() => translateStory(lang)} disabled={busy === "translate"}
+                      className="inline-flex items-center gap-1.5 border border-lumiere-ink/20 hover:border-lumiere-gold px-3 py-1 rounded-full font-mono text-[0.55rem] uppercase tracking-widest transition-colors">
+                      {busy === "translate" ? <Loader2 size={11} className="animate-spin" /> : <Wand2 size={11} />} {lang === "es" ? "Traducir al español" : "Translate to English"}
+                    </button>
+                  </div>
                   <div className="flex gap-3 overflow-x-auto pb-3" data-testid="beats-strip">
                     {beats.map((b) => (
-                      <div key={b.beat_id} data-testid={`beat-${b.sequence}`} className="min-w-[220px] rounded-xl border border-black/10 bg-lumiere-warm p-4">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-mono text-[0.55rem] uppercase tracking-widest text-lumiere-iris">{b.function}</span>
-                          <span className={`font-mono text-[0.5rem] uppercase tracking-widest border rounded-full px-1.5 py-0.5 ${b.criticality === "critical" ? "text-lumiere-gold border-lumiere-gold/50" : "text-lumiere-ink/40 border-black/15"}`}>{b.criticality}</span>
-                        </div>
-                        <h3 className="font-display text-lg leading-tight">{g(b.label)}</h3>
-                        <p className="text-xs text-lumiere-ink/55 mt-1 line-clamp-3">{g(b.purpose)}</p>
-                        <span className={`inline-block mt-2 font-mono text-[0.5rem] uppercase tracking-widest border rounded-full px-1.5 py-0.5 ${cov[b.coverage_status] || cov.empty}`}>{b.coverage_status}</span>
+                      <div key={b.beat_id} data-testid={`beat-${b.sequence}`} className="group relative min-w-[240px] rounded-xl border border-black/10 bg-lumiere-warm p-4">
+                        {editingBeat === b.beat_id ? (
+                          <div className="space-y-2">
+                            <input data-testid={`beat-edit-label-${b.sequence}`} value={beatDraft.label} onChange={(e) => setBeatDraft((d) => ({ ...d, label: e.target.value }))}
+                              className="w-full bg-white border border-black/15 rounded px-2 py-1 font-display text-lg" />
+                            <textarea data-testid={`beat-edit-purpose-${b.sequence}`} rows={3} value={beatDraft.purpose} onChange={(e) => setBeatDraft((d) => ({ ...d, purpose: e.target.value }))}
+                              className="w-full bg-white border border-black/15 rounded px-2 py-1 text-xs resize-none" />
+                            <div className="flex gap-2">
+                              <button data-testid={`beat-save-${b.sequence}`} onClick={saveBeat} className="inline-flex items-center gap-1 bg-lumiere-ink text-lumiere-ivory px-3 py-1 rounded-full font-mono text-[0.55rem] uppercase tracking-widest"><Check size={11} /> {s("Save", "Guardar")}</button>
+                              <button onClick={() => setEditingBeat(null)} className="inline-flex items-center gap-1 border border-black/15 text-lumiere-ink/60 px-3 py-1 rounded-full font-mono text-[0.55rem] uppercase tracking-widest"><X size={11} /> {s("Cancel", "Cancelar")}</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button data-testid={`beat-edit-${b.sequence}`} onClick={() => startEditBeat(b)} className="w-6 h-6 flex items-center justify-center rounded-full bg-black/5 text-lumiere-ink/50 hover:bg-lumiere-ink hover:text-white" title={s("Edit", "Editar")}><Pencil size={11} /></button>
+                              <button data-testid={`beat-delete-${b.sequence}`} onClick={() => deleteBeat(b.beat_id)} className="w-6 h-6 flex items-center justify-center rounded-full bg-black/5 text-lumiere-ink/50 hover:bg-red-600 hover:text-white" title={s("Remove", "Eliminar")}><Trash2 size={11} /></button>
+                            </div>
+                            <div className="flex items-center justify-between mb-1 pr-12">
+                              <span className="font-mono text-[0.55rem] uppercase tracking-widest text-lumiere-iris">{b.function}</span>
+                              <span className={`font-mono text-[0.5rem] uppercase tracking-widest border rounded-full px-1.5 py-0.5 ${b.criticality === "critical" ? "text-lumiere-gold border-lumiere-gold/50" : "text-lumiere-ink/40 border-black/15"}`}>{b.criticality}</span>
+                            </div>
+                            <h3 className="font-display text-lg leading-tight">{g(b.label)}</h3>
+                            <p className="text-xs text-lumiere-ink/55 mt-1 line-clamp-3">{g(b.purpose)}</p>
+                            <span className={`inline-block mt-2 font-mono text-[0.5rem] uppercase tracking-widest border rounded-full px-1.5 py-0.5 ${cov[b.coverage_status] || cov.empty}`}>{b.coverage_status}</span>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>

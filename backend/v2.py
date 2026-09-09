@@ -61,6 +61,11 @@ class ReviseIn(BaseModel):
     instruction: str
 
 
+class BeatEdit(BaseModel):
+    label: str = None
+    purpose: str = None
+
+
 class ShotStatusIn(BaseModel):
     status: str
     skip_reason: str = None
@@ -245,6 +250,62 @@ async def delete_shot(shot_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="shot_not_found")
     await _exp(shot["experience_id"], user)
     await db.shot_missions.delete_one({"shot_id": shot_id})
+    return {"ok": True}
+
+
+@v2_router.patch("/beats/{beat_id}")
+async def edit_beat(beat_id: str, body: BeatEdit, user: dict = Depends(get_current_user)):
+    beat = await db.story_beats.find_one({"beat_id": beat_id}, {"_id": 0})
+    if not beat:
+        raise HTTPException(status_code=404, detail="beat_not_found")
+    await _exp(beat["experience_id"], user)
+    upd = {}
+    if body.label is not None:
+        upd["label"] = body.label
+    if body.purpose is not None:
+        upd["purpose"] = body.purpose
+    if upd:
+        await db.story_beats.update_one({"beat_id": beat_id}, {"$set": upd})
+    return {"ok": True}
+
+
+@v2_router.delete("/beats/{beat_id}")
+async def delete_beat(beat_id: str, user: dict = Depends(get_current_user)):
+    beat = await db.story_beats.find_one({"beat_id": beat_id}, {"_id": 0})
+    if not beat:
+        raise HTTPException(status_code=404, detail="beat_not_found")
+    await _exp(beat["experience_id"], user)
+    await db.story_beats.delete_one({"beat_id": beat_id})
+    return {"ok": True}
+
+
+@v2_router.post("/experiences/{exp_id}/translate")
+async def translate_story(exp_id: str, to: str = "es", user: dict = Depends(get_current_user)):
+    exp = await _exp(exp_id, user)
+    if not exp.get("story_id"):
+        raise HTTPException(status_code=400, detail="no_story")
+    story = await db.story_plans.find_one({"experience_id": exp_id}, {"_id": 0})
+    beats = await _beats(exp["story_id"])
+    payload = {"title": (story or {}).get("title"), "premise": (story or {}).get("premise"),
+               "beats": [{"beat_id": b["beat_id"], "label": b.get("label"), "purpose": b.get("purpose")} for b in beats]}
+    out, _ = await v2agents.translate_story(exp_id, payload, to)
+    if isinstance(out, dict):
+        st = {}
+        if out.get("title"):
+            st["title"] = _flat(out["title"])
+        if out.get("premise"):
+            st["premise"] = _flat(out["premise"])
+        if st and story:
+            await db.story_plans.update_one({"story_id": exp["story_id"]}, {"$set": st})
+        for tb in (out.get("beats") or []):
+            bid = tb.get("beat_id")
+            bset = {}
+            if tb.get("label"):
+                bset["label"] = _flat(tb["label"])
+            if tb.get("purpose"):
+                bset["purpose"] = _flat(tb["purpose"])
+            if bid and bset:
+                await db.story_beats.update_one({"beat_id": bid}, {"$set": bset})
     return {"ok": True}
 
 
